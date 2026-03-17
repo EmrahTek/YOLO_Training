@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Logs and outputs
+logs/*.log
+outputs/*
+!outputs/.gitkeep
+runs/*
+!runs/.gitkeep
+
+# Data
+data/raw/*
+!data/raw/README.md
+data/external/cvat_export/images/*
+!data/external/cvat_export/images/.gitkeep
+data/external/cvat_export/labels/*
+!data/external/cvat_export/labels/.gitkeep
+data/dataset/images/train/*
+!data/dataset/images/train/.gitkeep
+data/dataset/images/val/*
+!data/dataset/images/val/.gitkeep
+data/dataset/labels/train/*
+!data/dataset/labels/train/.gitkeep
+data/dataset/labels/val/*
+!data/dataset/labels/val/.gitkeep
+data/demo/unseen_images/*
+!data/demo/unseen_images/.gitkeep
+data/demo/unseen_labels/*
+!data/demo/unseen_labels/.gitkeep
+
+# Ultralytics artifacts
+*.pt
+*.onnx
+*.engine
+*.tflite
+*.mlpackage
+
+# OS
+.DS_Store
+Thumbs.db

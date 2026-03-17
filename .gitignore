@@ -1,0 +1,99 @@
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+ENV/
+env/
+
+# =========================
+# Python cache / compiled files
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# =========================
+# IDE / editor / system files
+# =========================
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs / temp files
+# =========================
+logs/
+*.log
+*.tmp
+.cache/
+*.cache
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Build / packaging
+# =========================
+build/
+dist/
+*.egg-info/
+
+# =========================
+# YOLO / training outputs
+# =========================
+runs/
+outputs/
+
+# =========================
+# Model weights / export artifacts
+# =========================
+*.pt
+*.pth
+*.onnx
+*.engine
+*.torchscript
+*.tflite
+
+# =========================
+# Large archives
+# =========================
+*.zip
+*.tar
+*.gz
+*.7z
+
+# =========================
+# Videos
+# =========================
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# =========================
+# Local datasets
+# CVAT export and generated YOLO dataset should stay local
+# =========================
+data/raw/*
+data/external/*
+data/dataset/images/*
+data/dataset/labels/*
+
+# Keep folder structure
+!data/raw/.gitkeep
+!data/external/.gitkeep
+!data/dataset/images/train/.gitkeep
+!data/dataset/images/val/.gitkeep
+!data/dataset/labels/train/.gitkeep
+!data/dataset/labels/val/.gitkeep
+
+# =========================
+# Optional: large archives in legacy folders
+# =========================
+Archiv/
