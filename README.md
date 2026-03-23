@@ -1,12 +1,38 @@
 # YOLO Edge Detection Pipeline
 
-This repository contains a modular, production-oriented Python object detection pipeline built around Ultralytics YOLO. The project is designed to stay lightweight, readable, and easy to deploy on constrained hardware such as a Raspberry Pi 5.
+This project is a modular and production-oriented YOLO object detection codebase designed for lightweight execution, clean maintenance, and future Raspberry Pi 5 deployment. The architecture uses a package-based layout, structured logging, compatibility entry points, and automated tests.
 
-The codebase focuses on three practical goals:
+## Dataset Analysis Of `Caton_Hause.zip`
 
-1. Clean, maintainable architecture with small single-responsibility modules.
-2. Hardware-agnostic inference for images, videos, USB cameras, and RTSP streams.
-3. Safe dataset preparation utilities for CVAT YOLO exports packed as zip files.
+The provided CVAT export was inspected directly before the refactor. It is not a complete self-contained YOLO training dataset in the most common folder-based form.
+
+Observed structure inside the zip:
+
+- `data.yaml`
+- `train.txt`
+- `labels/train/*.txt`
+
+Important findings:
+
+- `train.txt` references 74 images.
+- The zip contains 65 label files.
+- 9 images are missing label files.
+- The image paths in `train.txt` point to `data/images/train/...`.
+- The local images in this repository are currently stored in `Data/images/...`.
+
+Missing label stems detected in the export:
+
+- `emrah_carton_hause_19`
+- `emrah_carton_hause_40`
+- `emrah_carton_hause_46`
+- `emrah_carton_hause_51`
+- `emrah_carton_hause_66`
+- `emrah_carton_hause_67`
+- `emrah_carton_hause_68`
+- `emrah_carton_hause_69`
+- `emrah_carton_hause_71`
+
+This is exactly why the dataset manager was rewritten. A production pipeline should fail loudly when annotations are incomplete instead of silently proceeding with corrupted supervision.
 
 ## Project Structure
 
@@ -14,59 +40,120 @@ The codebase focuses on three practical goals:
 .
 ├── README.md
 ├── requirements.txt
-├── auto_git_manager.py
-├── dataset_manager.py
-├── detector.py
 ├── main.py
-└── video_streamer.py
+├── detector.py
+├── video_streamer.py
+├── dataset_manager.py
+├── auto_git_manager.py
+├── src/
+│   └── yolo_edge_pipeline/
+│       ├── __init__.py
+│       ├── cli.py
+│       ├── core/
+│       │   ├── __init__.py
+│       │   ├── detector.py
+│       │   └── video_streamer.py
+│       ├── data/
+│       │   ├── __init__.py
+│       │   └── dataset_manager.py
+│       ├── tools/
+│       │   ├── __init__.py
+│       │   └── auto_git_manager.py
+│       └── utils/
+│           ├── __init__.py
+│           └── logging_utils.py
+└── tests/
+    ├── test_cli.py
+    └── test_dataset_manager.py
 ```
+
+The root-level Python files remain available as thin compatibility entry points, while the actual implementation lives under `src/yolo_edge_pipeline/`.
 
 ## Prerequisites
 
 - Python 3.10 or newer
 - `git`
-- A valid Git remote configured for push operations
-- A YOLO model checkpoint such as `yolov8n.pt`
-- Optional: webcam, USB camera, or RTSP camera stream
+- A configured Git remote
+- A YOLO checkpoint such as `yolov8n.pt`
+- Optional image, video, webcam, or RTSP source
 
 ## Virtual Environment Setup
-
-Create and activate a dedicated virtual environment:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-```
-
-Upgrade `pip` before installing dependencies:
-
-```bash
-python -m pip install --upgrade pip
-```
-
-## Install Requirements
-
-Install the required Python packages:
-
-```bash
+python3 -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Dataset Extraction From CVAT ZIP
+## Inference Commands
 
-The repository includes a dedicated `dataset_manager.py` module that can:
+### Image Inference
 
-- Extract a CVAT YOLO zip archive.
-- Validate that the exported structure contains the expected image and label folders.
-- Discover the dataset YAML file if one exists.
+```bash
+python3 main.py \
+    --source image \
+    --path Data/images/emrah_carton_hause_1.jpeg \
+    --model-path yolov8n.pt \
+    --show
+```
 
-Typical workflow:
+### Video Inference
 
-1. Place the CVAT export zip file in a local data directory, for example `Data/Caton_Hause.zip`.
-2. Use the dataset manager from Python or integrate it into future training scripts.
-3. Point the detector or training workflow to the validated dataset root.
+```bash
+python3 main.py \
+    --source video \
+    --path path/to/video.mp4 \
+    --model-path yolov8n.pt \
+    --save-output
+```
 
-Example usage from Python:
+### Default Webcam
+
+```bash
+python3 main.py \
+    --source webcam \
+    --camera-index 0 \
+    --model-path yolov8n.pt
+```
+
+### External USB Camera
+
+```bash
+python3 main.py \
+    --source webcam \
+    --camera-index 1 \
+    --model-path yolov8n.pt
+```
+
+### RTSP Stream
+
+```bash
+python3 main.py \
+    --source webcam \
+    --camera-index rtsp://username:password@camera-ip:554/stream \
+    --model-path yolov8n.pt
+```
+
+Useful optional flags:
+
+- `--confidence 0.25`
+- `--device cpu`
+- `--image-size 640`
+- `--show`
+- `--save-output`
+- `--output-dir outputs`
+- `--log-level INFO`
+- `--log-dir logs`
+
+## Dataset Handling
+
+The rewritten dataset manager supports two real-world cases:
+
+1. CVAT YOLO exports that contain `train.txt`, `data.yaml`, and labels.
+2. Canonical YOLO folder datasets that contain image and label directories.
+
+Example dataset inspection:
 
 ```python
 from pathlib import Path
@@ -74,85 +161,67 @@ from pathlib import Path
 from dataset_manager import DatasetManager
 
 manager = DatasetManager()
-extracted_path = manager.extract_cvat_zip(
+description = manager.inspect_cvat_zip(Path("Data/Caton_Hause.zip"))
+
+print(description.image_count)
+print(description.label_count)
+print(description.missing_labels)
+```
+
+Example normalization attempt using local images:
+
+```python
+from pathlib import Path
+
+from dataset_manager import DatasetManager
+
+manager = DatasetManager()
+manager.prepare_cvat_export(
     zip_path=Path("Data/Caton_Hause.zip"),
-    output_directory=Path("data/dataset")
+    extraction_directory=Path("data/interim/caton_hause"),
+    normalized_dataset_directory=Path("data/processed/caton_hause"),
+    image_source_directory=Path("Data/images"),
+    overwrite=True,
 )
-
-dataset_info = manager.validate_yolo_dataset(extracted_path)
-print(dataset_info)
 ```
 
-## Running The Application
+By default the normalization step fails when labels are missing. This is intentional because silent dataset corruption is more expensive than a loud validation error.
 
-The CLI entry point is `main.py`. The `--source` argument accepts exactly three choices:
+## Testing
 
-- `image`
-- `video`
-- `webcam`
-
-### Image Inference
+Run the tests with:
 
 ```bash
-python main.py \
-    --source image \
-    --path Data/images/example.jpg \
-    --model-path yolov8n.pt
+python3 -m unittest discover -s tests -v
 ```
 
-### Video Inference
+The tests cover:
 
-```bash
-python main.py \
-    --source video \
-    --path Data/videos/example.mp4 \
-    --model-path yolov8n.pt
+- CLI validation rules
+- CVAT zip inspection behavior
+- failure on incomplete annotations during normalization
+
+## Logging
+
+The project includes centralized logging with console output and rotating log files.
+
+Runtime logs can be written to:
+
+```text
+logs/application.log
 ```
 
-### Default Webcam Inference
-
-```bash
-python main.py \
-    --source webcam \
-    --camera-index 0 \
-    --model-path yolov8n.pt
-```
-
-### External USB Webcam Inference
-
-```bash
-python main.py \
-    --source webcam \
-    --camera-index 1 \
-    --model-path yolov8n.pt
-```
-
-### RTSP Stream Inference
-
-```bash
-python main.py \
-    --source webcam \
-    --camera-index rtsp://username:password@camera-ip-address:554/stream \
-    --model-path yolov8n.pt
-```
-
-## CLI Arguments Overview
-
-Core arguments:
-
-- `--source`: Required. One of `image`, `video`, or `webcam`.
-- `--path`: Required for `image` and `video`.
-- `--camera-index`: Required for `webcam` logic, defaults to `0`. Can be an integer camera index or an RTSP URL.
-- `--model-path`: Path to the YOLO model checkpoint.
-- `--confidence`: Confidence threshold for detections.
-- `--device`: Optional inference device override such as `cpu`.
-- `--save-output`: Save annotated frames or videos to disk.
-- `--output-dir`: Directory used for saved outputs.
-- `--show`: Display annotated output in an OpenCV window.
+This is especially helpful for edge deployments where you may need post-run diagnostics instead of live terminal monitoring.
 
 ## Git Automation
 
-This repository includes `auto_git_manager.py` to monitor file changes and automatically run:
+Run the Git watcher in the background if you want continuous automatic commits and pushes:
+
+```bash
+python3 auto_git_manager.py --watch-dir .
+```
+
+It performs:
 
 ```bash
 git add <file>
@@ -160,73 +229,45 @@ git commit -m "feat: add/update <file>"
 git push
 ```
 
-Start it in the background after the initial setup:
-
-```bash
-python auto_git_manager.py --watch-dir .
-```
-
-The watcher is useful because it keeps your strict version control workflow active while you continue iterating on the project.
-
 ## Raspberry Pi 5 Deployment
 
-The codebase is intentionally structured for edge deployment. For Raspberry Pi 5, follow this sequence:
-
-1. Install system packages required by OpenCV and Python virtual environments.
-2. Create a fresh virtual environment on the Pi.
-3. Install the Python dependencies from `requirements.txt`.
-4. Use a lightweight model checkpoint such as `yolov8n.pt`.
-5. Prefer CPU inference first, then benchmark smaller image sizes before increasing resolution.
-
-Recommended setup flow:
+For Raspberry Pi 5, keep the runtime conservative and CPU-focused first:
 
 ```bash
 sudo apt update
 sudo apt install -y python3-venv python3-pip libatlas-base-dev libopenjp2-7 libtiff6
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
+python3 -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Practical Raspberry Pi 5 recommendations:
+Recommended deployment practices:
 
-- Use the smallest model that still satisfies accuracy needs.
-- Lower the frame size for real-time streams.
-- Disable on-screen display in headless deployments.
-- Save output only when necessary to reduce I/O overhead.
-- Use a dedicated power supply and active cooling during long inference sessions.
-- Prefer USB cameras with stable Linux support when possible.
+- Start with `yolov8n.pt` or another nano-scale model.
+- Keep `--image-size` modest.
+- Use `--device cpu` unless you have a validated accelerator path.
+- Avoid `--show` for headless deployments.
+- Save outputs only when needed to reduce storage writes.
+- Use active cooling for sustained inference workloads.
 
-For headless execution on the Pi:
+Example headless command on Raspberry Pi 5:
 
 ```bash
-python main.py \
+python3 main.py \
     --source webcam \
     --camera-index 0 \
     --model-path yolov8n.pt \
-    --device cpu
+    --device cpu \
+    --image-size 416
 ```
 
-## Clean Code Principles Applied
+## Design Notes
 
-The modules in this project are designed to keep responsibilities separate:
+Key architectural decisions in this refactor:
 
-- `main.py` handles CLI parsing and orchestration.
-- `detector.py` encapsulates YOLO model loading and inference.
-- `video_streamer.py` handles media input and streaming concerns.
-- `dataset_manager.py` handles dataset extraction and validation.
-- `auto_git_manager.py` handles automatic version control actions.
-
-This separation keeps the code easier to test, extend, and deploy.
-
-## Future Extensions
-
-The current architecture is ready for the next stage of evolution, including:
-
-- batch inference jobs
-- training entry points
-- model export to ONNX or TensorRT
-- structured logging
-- unit and integration tests
-- configuration files for deployment profiles
+- Package-based source layout for cleaner boundaries.
+- Thin root entry points for simple execution.
+- Logging separated into a shared utility module.
+- Dataset validation aligned with the actual CVAT export you provided.
+- Tests added to prevent regressions in CLI and dataset logic.
