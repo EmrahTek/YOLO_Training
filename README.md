@@ -2,6 +2,17 @@
 
 This repository is a practical computer vision project for custom carton detection with YOLO. It is designed for a clean local workflow today and an edge-device deployment path later, including Raspberry Pi style usage.
 
+## Quick Start
+
+The two commands below were tested and confirmed working in this project:
+
+```bash
+.venv/bin/image --model-path runs/train/carton_detector_gpu/weights/best.pt
+.venv/bin/webcam --model-path runs/train/carton_detector_gpu/weights/best.pt
+```
+
+If your README preview still shows old commands such as `python3 main.py --source ...`, refresh or reopen the Markdown preview. The file on disk has already been updated.
+
 The project covers four main jobs:
 
 1. Inspect and validate the CVAT YOLO export.
