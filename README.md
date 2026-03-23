@@ -9,6 +9,7 @@ This project is a modular and production-oriented YOLO object detection codebase
 ├── README.md
 ├── requirements.txt
 ├── main.py
+├── train.py
 ├── auto_git_manager.py
 ├── yolo_edge/
 │   ├── __init__.py
@@ -80,7 +81,15 @@ Missing label stems:
 
 The dataset manager intentionally fails normalization by default when labels are missing, because silent data corruption is dangerous for training pipelines.
 
+This also means the current repository does not yet contain a trained carton model. The CVAT export gives you annotations, not a ready inference model. If you run `models/yolov8n.pt`, you will get generic COCO detections such as `person`, `chair`, or `tv`.
+
 ## Inference Commands
+
+Important:
+
+- `models/yolov8n.pt` is only the generic starting model.
+- It is not trained for your carton classes.
+- You must train a custom model first if you want detections such as `Milch_Karton_shokolade` or `Cube_Karton`.
 
 ### Image
 
@@ -89,6 +98,16 @@ python3 main.py \
     --source image \
     --path data/images/emrah_carton_hause_1.jpeg \
     --model-path models/yolov8n.pt \
+    --show
+```
+
+After training, you should instead use a custom weight such as:
+
+```bash
+python3 main.py \
+    --source image \
+    --path data/images/emrah_carton_hause_1.jpeg \
+    --model-path runs/train/carton_detector/weights/best.pt \
     --show
 ```
 
@@ -189,6 +208,48 @@ manager.prepare_cvat_export(
     overwrite=True,
 )
 ```
+
+Example train/val dataset creation for training:
+
+```python
+from pathlib import Path
+
+from yolo_edge.data.dataset_manager import DatasetManager
+
+manager = DatasetManager()
+manager.create_training_dataset(
+    dataset_root=Path("data/cvat_exports/caton_hause"),
+    image_source_directory=Path("data/images"),
+    output_directory=Path("data/processed/caton_hause"),
+    validation_ratio=0.2,
+    overwrite=True,
+)
+```
+
+## Training
+
+Train a custom carton model with:
+
+```bash
+python3 train.py \
+    --dataset-root data/cvat_exports/caton_hause \
+    --image-source-dir data/images \
+    --prepared-dataset-dir data/processed/caton_hause \
+    --base-model models/yolov8n.pt \
+    --epochs 50 \
+    --image-size 640 \
+    --batch-size 8 \
+    --device cpu \
+    --overwrite
+```
+
+Expected training result:
+
+```text
+runs/train/carton_detector/weights/best.pt
+```
+
+Once `best.pt` exists, use that file for inference instead of `models/yolov8n.pt`.
 
 ## Testing
 

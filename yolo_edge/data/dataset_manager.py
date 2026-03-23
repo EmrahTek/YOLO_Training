@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from pathlib import Path
+import random
 import shutil
 from typing import Iterable
 import zipfile
@@ -187,6 +188,70 @@ class DatasetManager:
         )
         return self.validate_yolo_dataset(normalized_dataset_directory)
 
+    def create_training_dataset(
+        self,
+        dataset_root: Path,
+        image_source_directory: Path,
+        output_directory: Path,
+        validation_ratio: float = 0.2,
+        overwrite: bool = False,
+        random_seed: int = 42,
+    ) -> Path:
+        """Create a clean YOLO train/val dataset using only images that have labels."""
+        if not 0.0 < validation_ratio < 1.0:
+            raise ValueError("validation_ratio must be between 0 and 1.")
+
+        description = self.validate_yolo_dataset(dataset_root)
+        if description.labels_directory is None:
+            raise DatasetValidationError("Labels directory is required to build a training dataset.")
+
+        image_lookup = self._build_image_lookup(image_source_directory)
+        labeled_image_names = sorted(
+            image_path.name
+            for image_path in image_lookup.values()
+            if image_path.stem not in set(description.missing_labels)
+            and (description.labels_directory / "train" / f"{image_path.stem}.txt").exists()
+        )
+
+        if len(labeled_image_names) < 2:
+            raise DatasetValidationError("At least two labeled images are required to build train/val splits.")
+
+        output_directory = output_directory.resolve()
+        if output_directory.exists():
+            if not overwrite:
+                raise FileExistsError(f"Output directory already exists: {output_directory}")
+            shutil.rmtree(output_directory)
+
+        self._create_standard_dataset_directories(output_directory)
+
+        random_generator = random.Random(random_seed)
+        shuffled_image_names = labeled_image_names[:]
+        random_generator.shuffle(shuffled_image_names)
+
+        validation_count = max(1, int(len(shuffled_image_names) * validation_ratio))
+        validation_names = set(shuffled_image_names[:validation_count])
+
+        for image_name in shuffled_image_names:
+            split_name = "val" if image_name in validation_names else "train"
+            source_image_path = image_lookup[image_name]
+            source_label_path = description.labels_directory / "train" / f"{source_image_path.stem}.txt"
+
+            shutil.copy2(source_image_path, output_directory / "images" / split_name / image_name)
+            shutil.copy2(source_label_path, output_directory / "labels" / split_name / source_label_path.name)
+
+        self._write_training_data_yaml(
+            output_directory=output_directory,
+            class_names=description.class_names,
+        )
+        LOGGER.info(
+            "Created training dataset at %s with train=%s val=%s labeled_samples=%s",
+            output_directory,
+            len(shuffled_image_names) - validation_count,
+            validation_count,
+            len(shuffled_image_names),
+        )
+        return output_directory
+
     def _materialize_normalized_dataset(
         self,
         description: DatasetDescription,
@@ -228,6 +293,24 @@ class DatasetManager:
             "path": str(normalized_dataset_directory),
             "train": "images/train",
             "names": description.class_names,
+        }
+        with data_yaml_path.open("w", encoding="utf-8") as yaml_file:
+            yaml.safe_dump(yaml_content, yaml_file, sort_keys=False)
+
+    def _create_standard_dataset_directories(self, output_directory: Path) -> None:
+        """Create the standard YOLO image and label split directories."""
+        for split_name in ("train", "val"):
+            (output_directory / "images" / split_name).mkdir(parents=True, exist_ok=True)
+            (output_directory / "labels" / split_name).mkdir(parents=True, exist_ok=True)
+
+    def _write_training_data_yaml(self, output_directory: Path, class_names: dict[int, str]) -> None:
+        """Write the dataset YAML file for YOLO training."""
+        data_yaml_path = output_directory / "data.yaml"
+        yaml_content = {
+            "path": str(output_directory),
+            "train": "images/train",
+            "val": "images/val",
+            "names": class_names,
         }
         with data_yaml_path.open("w", encoding="utf-8") as yaml_file:
             yaml.safe_dump(yaml_content, yaml_file, sort_keys=False)

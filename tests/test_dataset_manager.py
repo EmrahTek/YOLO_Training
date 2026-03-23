@@ -42,6 +42,30 @@ class DatasetManagerTestCase(unittest.TestCase):
                     overwrite=True,
                 )
 
+    def test_create_training_dataset_uses_only_labeled_samples(self) -> None:
+        """Training dataset creation should exclude images that do not have labels."""
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary_path = Path(temporary_directory)
+            output_directory = temporary_path / "prepared"
+
+            prepared_dataset = self.manager.create_training_dataset(
+                dataset_root=self.dataset_root,
+                image_source_directory=PROJECT_ROOT / "data" / "images",
+                output_directory=output_directory,
+                validation_ratio=0.2,
+                overwrite=True,
+                random_seed=123,
+            )
+
+            train_images = list((prepared_dataset / "images" / "train").glob("*.jpeg"))
+            val_images = list((prepared_dataset / "images" / "val").glob("*.jpeg"))
+            train_labels = list((prepared_dataset / "labels" / "train").glob("*.txt"))
+            val_labels = list((prepared_dataset / "labels" / "val").glob("*.txt"))
+
+            self.assertEqual(len(train_images) + len(val_images), 65)
+            self.assertEqual(len(train_images), len(train_labels))
+            self.assertEqual(len(val_images), len(val_labels))
+
 
 if __name__ == "__main__":
     unittest.main()
