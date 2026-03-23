@@ -6,8 +6,14 @@ from dataclasses import dataclass
 import logging
 from pathlib import Path
 
-import cv2
-import numpy as np
+try:
+    import cv2
+    import numpy as np
+except ModuleNotFoundError as error:
+    raise ModuleNotFoundError(
+        "Missing runtime dependency while importing the video streamer module. "
+        "Activate the virtual environment and run 'pip install -r requirements.txt'."
+    ) from error
 
 
 LOGGER = logging.getLogger(__name__)

@@ -82,11 +82,7 @@ outputs/
 # Local datasets
 # CVAT export and generated YOLO dataset should stay local
 # =========================
-Data/
-data/raw/*
-data/external/*
-data/dataset/images/*
-data/dataset/labels/*
+data/*
 
 # Keep folder structure
 !data/raw/.gitkeep
@@ -95,6 +91,7 @@ data/dataset/labels/*
 !data/dataset/images/val/.gitkeep
 !data/dataset/labels/train/.gitkeep
 !data/dataset/labels/val/.gitkeep
+!data/.gitkeep
 
 # =========================
 # Optional: large archives in legacy folders

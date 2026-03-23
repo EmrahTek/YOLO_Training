@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import unittest
 
-from main import build_argument_parser
-from main import validate_arguments
+from yolo_edge.cli import build_argument_parser
+from yolo_edge.cli import validate_arguments
 
 
 class CliValidationTestCase(unittest.TestCase):

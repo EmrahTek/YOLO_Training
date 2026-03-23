@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 import logging
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-from ultralytics import YOLO
+try:
+    import numpy as np
+    from ultralytics import YOLO
+except ModuleNotFoundError as error:
+    raise ModuleNotFoundError(
+        "Missing runtime dependency while importing the detector module. "
+        "Activate the virtual environment and run 'pip install -r requirements.txt'."
+    ) from error
 
 
 LOGGER = logging.getLogger(__name__)
@@ -25,10 +32,25 @@ class Detection:
 
 
 @dataclass(frozen=True)
+class DetectionSummary:
+    """Represent aggregated detection information for one frame."""
+
+    total_detections: int
+    class_counts: dict[str, int]
+    average_confidence: float
+
+    @property
+    def has_detections(self) -> bool:
+        """Return True when at least one object was detected."""
+        return self.total_detections > 0
+
+
+@dataclass(frozen=True)
 class InferenceResult:
     """Represent the structured output of one inference pass."""
 
     detections: tuple[Detection, ...]
+    summary: DetectionSummary
     annotated_frame: np.ndarray
 
 
@@ -65,8 +87,13 @@ class ObjectDetector:
         )
         result = results[0]
         detections = self._extract_detections(result)
+        summary = self._summarize_detections(detections)
         annotated_frame = result.plot()
-        return InferenceResult(detections=detections, annotated_frame=annotated_frame)
+        return InferenceResult(
+            detections=detections,
+            summary=summary,
+            annotated_frame=annotated_frame,
+        )
 
     def _extract_detections(self, result: Any) -> tuple[Detection, ...]:
         """Convert Ultralytics results into serializable domain objects."""
@@ -90,3 +117,16 @@ class ObjectDetector:
             )
 
         return tuple(detections)
+
+    def _summarize_detections(self, detections: tuple[Detection, ...]) -> DetectionSummary:
+        """Aggregate detections into compact logging-friendly statistics."""
+        if not detections:
+            return DetectionSummary(total_detections=0, class_counts={}, average_confidence=0.0)
+
+        class_counts = Counter(detection.class_name for detection in detections)
+        average_confidence = sum(detection.confidence for detection in detections) / len(detections)
+        return DetectionSummary(
+            total_detections=len(detections),
+            class_counts=dict(sorted(class_counts.items())),
+            average_confidence=average_confidence,
+        )

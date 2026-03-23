@@ -52,7 +52,7 @@ class DatasetDescription:
 
 
 class DatasetManager:
-    """Handle CVAT YOLO export archives and normalized dataset preparation."""
+    """Handle CVAT YOLO export directories and normalized dataset preparation."""
 
     def extract_cvat_zip(
         self,
@@ -76,7 +76,6 @@ class DatasetManager:
             shutil.rmtree(output_directory)
 
         output_directory.mkdir(parents=True, exist_ok=True)
-
         with zipfile.ZipFile(zip_path, "r") as zip_file:
             zip_file.extractall(output_directory)
 
@@ -84,7 +83,7 @@ class DatasetManager:
         return output_directory
 
     def validate_yolo_dataset(self, dataset_root: Path) -> DatasetDescription:
-        """Validate an extracted YOLO dataset using both file-list and folder layouts."""
+        """Validate a YOLO dataset using both file-list and folder layouts."""
         dataset_root = dataset_root.resolve()
         if not dataset_root.exists():
             raise FileNotFoundError(f"Dataset root not found: {dataset_root}")
@@ -96,17 +95,15 @@ class DatasetManager:
 
         class_names = self._read_class_names(data_yaml_path)
         issues: list[DatasetIssue] = []
-
         image_stems: set[str] = set()
         missing_images: list[str] = []
+
         if train_list_path is not None:
             listed_image_paths = self._read_list_file(train_list_path)
             image_count = len(listed_image_paths)
-
             for listed_path in listed_image_paths:
                 image_stems.add(Path(listed_path).stem)
-                resolved_image = dataset_root / listed_path
-                if not resolved_image.exists():
+                if not (dataset_root / listed_path).exists():
                     missing_images.append(listed_path)
 
             if missing_images:
@@ -114,8 +111,8 @@ class DatasetManager:
                     DatasetIssue(
                         severity="warning",
                         message=(
-                            "The archive references images that are not present inside the extracted dataset. "
-                            "This is common for CVAT YOLO exports that only include labels and a train list."
+                            "The dataset references images that are not present in the export directory. "
+                            "This is common for CVAT YOLO exports that only contain labels and train lists."
                         ),
                     )
                 )
@@ -133,8 +130,8 @@ class DatasetManager:
 
         label_files = list(self._collect_files(labels_directory, {SUPPORTED_LABEL_SUFFIX}))
         label_stems = {label_path.stem for label_path in label_files}
-        label_count = len(label_files)
         missing_labels = sorted(image_stems - label_stems)
+        label_count = len(label_files)
 
         if missing_labels:
             issues.append(
@@ -142,7 +139,7 @@ class DatasetManager:
                     severity="error",
                     message=(
                         f"The dataset contains {len(missing_labels)} images without labels. "
-                        "This will break strict supervised training workflows."
+                        "Strict training should not continue until this is fixed."
                     ),
                 )
             )
@@ -161,22 +158,20 @@ class DatasetManager:
             issues=tuple(issues),
         )
 
+    def inspect_dataset_directory(self, dataset_root: Path) -> DatasetDescription:
+        """Inspect an already extracted dataset directory."""
+        return self.validate_yolo_dataset(dataset_root)
+
     def prepare_cvat_export(
         self,
-        zip_path: Path,
-        extraction_directory: Path,
+        dataset_root: Path,
         normalized_dataset_directory: Path,
         image_source_directory: Path | None = None,
         overwrite: bool = False,
         allow_missing_labels: bool = False,
     ) -> DatasetDescription:
-        """Extract, validate, and normalize a CVAT YOLO export for local training or inspection."""
-        extracted_root = self.extract_cvat_zip(
-            zip_path=zip_path,
-            output_directory=extraction_directory,
-            overwrite=overwrite,
-        )
-        description = self.validate_yolo_dataset(extracted_root)
+        """Normalize an extracted CVAT YOLO export for local training or inspection."""
+        description = self.validate_yolo_dataset(dataset_root)
 
         if description.missing_labels and not allow_missing_labels:
             raise DatasetValidationError(
@@ -191,20 +186,6 @@ class DatasetManager:
             overwrite=overwrite,
         )
         return self.validate_yolo_dataset(normalized_dataset_directory)
-
-    def inspect_cvat_zip(self, zip_path: Path) -> DatasetDescription:
-        """Inspect a zip archive inside a temporary extraction directory."""
-        temporary_directory = zip_path.resolve().parent / f".tmp_{zip_path.stem}_inspect"
-        try:
-            extracted_root = self.extract_cvat_zip(
-                zip_path=zip_path,
-                output_directory=temporary_directory,
-                overwrite=True,
-            )
-            return self.validate_yolo_dataset(extracted_root)
-        finally:
-            if temporary_directory.exists():
-                shutil.rmtree(temporary_directory)
 
     def _materialize_normalized_dataset(
         self,
@@ -231,8 +212,7 @@ class DatasetManager:
             raise DatasetValidationError("Labels directory is required to normalize the dataset.")
 
         for label_path in description.labels_directory.rglob("*.txt"):
-            target_path = labels_train_directory / label_path.name
-            shutil.copy2(label_path, target_path)
+            shutil.copy2(label_path, labels_train_directory / label_path.name)
 
         image_lookup = self._build_image_lookup(image_source_directory)
         if description.train_list_path is not None:
@@ -241,7 +221,6 @@ class DatasetManager:
                 if source_image is None:
                     LOGGER.warning("Skipping missing source image: %s", relative_image_path)
                     continue
-
                 shutil.copy2(source_image, images_train_directory / source_image.name)
 
         data_yaml_path = normalized_dataset_directory / "data.yaml"

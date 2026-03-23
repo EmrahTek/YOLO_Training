@@ -8,8 +8,8 @@ import unittest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-from dataset_manager import DatasetManager
-from dataset_manager import DatasetValidationError
+from yolo_edge.data.dataset_manager import DatasetManager
+from yolo_edge.data.dataset_manager import DatasetValidationError
 
 
 class DatasetManagerTestCase(unittest.TestCase):
@@ -18,11 +18,11 @@ class DatasetManagerTestCase(unittest.TestCase):
     def setUp(self) -> None:
         """Create shared test fixtures."""
         self.manager = DatasetManager()
-        self.zip_path = PROJECT_ROOT / "Data" / "Caton_Hause.zip"
+        self.dataset_root = PROJECT_ROOT / "data" / "cvat_exports" / "caton_hause"
 
-    def test_inspect_cvat_zip_reports_missing_labels(self) -> None:
-        """The provided CVAT export should report the known missing labels."""
-        description = self.manager.inspect_cvat_zip(self.zip_path)
+    def test_inspect_dataset_directory_reports_missing_labels(self) -> None:
+        """The extracted CVAT export should report the known missing labels."""
+        description = self.manager.inspect_dataset_directory(self.dataset_root)
 
         self.assertEqual(description.image_count, 74)
         self.assertEqual(description.label_count, 65)
@@ -36,10 +36,9 @@ class DatasetManagerTestCase(unittest.TestCase):
 
             with self.assertRaises(DatasetValidationError):
                 self.manager.prepare_cvat_export(
-                    zip_path=self.zip_path,
-                    extraction_directory=temporary_path / "extracted",
+                    dataset_root=self.dataset_root,
                     normalized_dataset_directory=temporary_path / "normalized",
-                    image_source_directory=PROJECT_ROOT / "Data" / "images",
+                    image_source_directory=PROJECT_ROOT / "data" / "images",
                     overwrite=True,
                 )
 
