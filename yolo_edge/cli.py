@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_MODEL_PATH = Path("models/yolov8n.pt") if Path("models/yolov8n.pt").exists() else Path("yolov8n.pt")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -60,6 +61,41 @@ def validate_arguments(arguments: argparse.Namespace, parser: argparse.ArgumentP
 
     if arguments.source == "webcam" and arguments.path is not None:
         parser.error("--path cannot be used when --source is webcam.")
+
+
+def resolve_legacy_path(path: Path | None) -> Path | None:
+    """Map legacy project paths to the current folder structure when possible."""
+    if path is None:
+        return None
+
+    candidate_path = path
+    if candidate_path.exists():
+        return candidate_path
+
+    legacy_rewrites = {
+        Path("Data/images"): Path("data/images"),
+        Path("Data/Caton_Hause"): Path("data/cvat_exports/caton_hause"),
+        Path("yolov8n.pt"): Path("models/yolov8n.pt"),
+        Path("yolo11n.pt"): Path("models/yolo11n.pt"),
+        Path("yolo11n-obb.pt"): Path("models/yolo11n-obb.pt"),
+        Path("yolov10n.pt"): Path("models/yolov10n.pt"),
+        Path("yolov8m-cls.pt"): Path("models/yolov8m-cls.pt"),
+        Path("yolov8n-pose.pt"): Path("models/yolov8n-pose.pt"),
+        Path("yolov8n-seg.pt"): Path("models/yolov8n-seg.pt"),
+    }
+
+    normalized_candidate = Path(str(candidate_path).strip())
+    for legacy_prefix, current_prefix in legacy_rewrites.items():
+        try:
+            relative_path = normalized_candidate.relative_to(legacy_prefix)
+            rewritten_path = current_prefix / relative_path
+            if rewritten_path.exists():
+                LOGGER.warning("Resolved legacy path %s -> %s", candidate_path, rewritten_path)
+                return rewritten_path
+        except ValueError:
+            continue
+
+    return candidate_path
 
 
 def run_image_inference(
@@ -177,6 +213,8 @@ def main() -> None:
 
         arguments = parse_arguments()
         configure_logging(log_level=arguments.log_level, log_directory=arguments.log_dir)
+        arguments.path = resolve_legacy_path(arguments.path)
+        arguments.model_path = resolve_legacy_path(arguments.model_path)
 
         detector = ObjectDetector(
             model_path=arguments.model_path,
@@ -220,6 +258,13 @@ def main() -> None:
         )
     except ModuleNotFoundError as error:
         LOGGER.error("%s", error)
+        LOGGER.error("Current interpreter: %s", sys.executable)
+        LOGGER.error("Recommended interpreter: %s", PROJECT_ROOT / ".venv" / "bin" / "python3")
+        LOGGER.error(
+            "Run with the project interpreter, for example: %s main.py --source image --path data/images/emrah_carton_hause_1.jpeg --model-path models/yolov8n.pt",
+            PROJECT_ROOT / ".venv" / "bin" / "python3",
+        )
+        LOGGER.error("If needed, recreate the virtual environment because your current activation script may point to an old path.")
         LOGGER.error("Install the required packages with: pip install -r requirements.txt")
         raise SystemExit(1) from error
     except (FileNotFoundError, ValueError) as error:
