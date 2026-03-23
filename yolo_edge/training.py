@@ -11,6 +11,7 @@ from yolo_edge.utils.logging_utils import configure_logging
 
 try:
     from ultralytics import YOLO
+    import torch
 except ModuleNotFoundError as error:
     raise ModuleNotFoundError(
         "Missing Ultralytics dependency. Activate the virtual environment and run 'pip install -r requirements.txt'."
@@ -18,6 +19,11 @@ except ModuleNotFoundError as error:
 
 
 LOGGER = logging.getLogger(__name__)
+
+
+def get_default_device() -> str:
+    """Return the preferred training device for the current machine."""
+    return "0" if torch.cuda.is_available() else "cpu"
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -50,11 +56,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--image-size", type=int, default=640)
     parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--device", default=get_default_device())
     parser.add_argument("--validation-ratio", type=float, default=0.2)
     parser.add_argument("--project-dir", type=Path, default=Path("runs/train"))
     parser.add_argument("--run-name", default="carton_detector")
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--resume", action="store_true")
     parser.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     parser.add_argument("--log-dir", type=Path, default=Path("logs"))
     return parser
@@ -66,6 +73,10 @@ def main() -> None:
     configure_logging(log_level=arguments.log_level, log_directory=arguments.log_dir)
 
     try:
+        LOGGER.info("CUDA available=%s selected_device=%s", torch.cuda.is_available(), arguments.device)
+        if torch.cuda.is_available():
+            LOGGER.info("Detected GPU: %s", torch.cuda.get_device_name(0))
+
         dataset_manager = DatasetManager()
         prepared_dataset_dir = dataset_manager.create_training_dataset(
             dataset_root=arguments.dataset_root,
@@ -78,16 +89,19 @@ def main() -> None:
 
         LOGGER.info("Starting custom training with dataset=%s", data_yaml_path)
         model = YOLO(str(arguments.base_model.resolve()))
-        training_results = model.train(
-            data=str(data_yaml_path),
-            epochs=arguments.epochs,
-            imgsz=arguments.image_size,
-            batch=arguments.batch_size,
-            device=arguments.device,
-            project=str(arguments.project_dir),
-            name=arguments.run_name,
-            exist_ok=arguments.overwrite,
-        )
+        training_parameters = {
+            "data": str(data_yaml_path),
+            "epochs": arguments.epochs,
+            "imgsz": arguments.image_size,
+            "batch": arguments.batch_size,
+            "device": arguments.device,
+            "project": str(arguments.project_dir),
+            "name": arguments.run_name,
+            "exist_ok": arguments.overwrite,
+        }
+        if arguments.resume:
+            training_parameters["resume"] = True
+        training_results = model.train(**training_parameters)
 
         best_model_path = arguments.project_dir / arguments.run_name / "weights" / "best.pt"
         LOGGER.info("Training finished. Best model should be available at %s", best_model_path)
