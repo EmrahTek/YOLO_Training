@@ -12,17 +12,15 @@ class CliValidationTestCase(unittest.TestCase):
     """Validate source-specific CLI argument rules."""
 
     def test_image_source_requires_path(self) -> None:
-        """Image inference must require a file path."""
+        """Image mode should parse correctly with only the mode name."""
         parser = build_argument_parser()
-        arguments = parser.parse_args(["--source", "image"])
-
-        with self.assertRaises(SystemExit):
-            validate_arguments(arguments, parser)
+        arguments = parser.parse_args(["image"])
+        validate_arguments(arguments, parser)
 
     def test_webcam_source_rejects_path(self) -> None:
         """Webcam inference should not accept a file path argument."""
         parser = build_argument_parser()
-        arguments = parser.parse_args(["--source", "webcam", "--path", "sample.jpg"])
+        arguments = parser.parse_args(["webcam", "--path", "sample.jpg"])
 
         with self.assertRaises(SystemExit):
             validate_arguments(arguments, parser)
@@ -30,7 +28,13 @@ class CliValidationTestCase(unittest.TestCase):
     def test_video_source_accepts_path(self) -> None:
         """Video inference should accept a valid path argument."""
         parser = build_argument_parser()
-        arguments = parser.parse_args(["--source", "video", "--path", "sample.mp4"])
+        arguments = parser.parse_args(["video", "--path", "sample.mp4"])
+        validate_arguments(arguments, parser)
+
+    def test_external_camera_mode_is_supported(self) -> None:
+        """External camera should be a valid simplified mode."""
+        parser = build_argument_parser()
+        arguments = parser.parse_args(["external-camera"])
         validate_arguments(arguments, parser)
 
 

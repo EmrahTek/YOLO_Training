@@ -1,8 +1,31 @@
-# YOLO Edge Detection Pipeline
+# YOLO Carton Detection Project
 
-This project is a modular and production-oriented YOLO object detection codebase designed for lightweight execution, clean maintenance, and future Raspberry Pi 5 deployment. The runtime is organized around a standard Python package, clearer local asset folders, structured logging, and basic automated tests.
+This repository is a practical computer vision project for custom carton detection with YOLO. It is designed for a clean local workflow today and an edge-device deployment path later, including Raspberry Pi style usage.
 
-## Current Project Structure
+The project covers four main jobs:
+
+1. Inspect and validate the CVAT YOLO export.
+2. Prepare a clean train/validation dataset from the labeled images.
+3. Train a custom YOLO model for your carton classes.
+4. Run inference in a simple way on images, videos, webcams, or an external camera.
+
+## Project Goal
+
+The goal is not to use the generic COCO YOLO model forever. The generic model only knows common classes like `person`, `chair`, or `tv`. Your real target classes come from the CVAT export:
+
+- `Milch_Karton_shokolade`
+- `Miclh_Karton_Vanille`
+- `Teeschachtel`
+- `Cube_Karton`
+
+Because of that, the correct workflow is:
+
+1. Validate the CVAT export.
+2. Build a clean training dataset.
+3. Train a custom model.
+4. Run inference with the trained `best.pt`.
+
+## Current Folder Structure
 
 ```text
 .
@@ -12,17 +35,14 @@ This project is a modular and production-oriented YOLO object detection codebase
 ├── train.py
 ├── auto_git_manager.py
 ├── yolo_edge/
-│   ├── __init__.py
 │   ├── cli.py
+│   ├── training.py
 │   ├── core/
-│   │   ├── __init__.py
 │   │   ├── detector.py
 │   │   └── video_streamer.py
 │   ├── data/
-│   │   ├── __init__.py
 │   │   └── dataset_manager.py
 │   └── utils/
-│       ├── __init__.py
 │       └── logging_utils.py
 ├── tools/
 │   └── auto_git_manager.py
@@ -32,40 +52,31 @@ This project is a modular and production-oriented YOLO object detection codebase
 ├── data/
 │   ├── cvat_exports/
 │   │   └── caton_hause/
-│   └── images/
-└── models/
-    └── yolov8n.pt
+│   ├── images/
+│   └── processed/
+├── models/
+│   └── yolov8n.pt
+├── runs/
+│   └── train/
+└── logs/
 ```
 
-`main.py` is the only root application entry point. The detection, streaming, dataset, and logging code now lives under `yolo_edge/`, which makes the codebase easier to maintain and test.
+## Dataset Status
 
-## Dependency Note
+The CVAT export was inspected carefully.
 
-`numpy` is now declared explicitly in `requirements.txt`. Even though Ultralytics and OpenCV typically pull it in transitively, it should be pinned directly because the detector and streamer import it at runtime.
-
-Install dependencies with:
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-## Dataset Review
-
-The original `Caton_Hause.zip` archive was removed because it is no longer needed in the working tree. The extracted dataset is now kept under:
+Dataset root:
 
 ```text
 data/cvat_exports/caton_hause/
 ```
 
-Important findings from the dataset inspection:
+Important findings:
 
-- The export contains `data.yaml`, `train.txt`, and `labels/train/*.txt`.
-- `train.txt` references 74 images.
-- Only 65 label files exist.
-- 9 images are missing label files.
+- `train.txt` references `74` images.
+- Only `65` label files exist.
+- `9` images are missing labels.
+- Training should use only the labeled subset unless you manually complete the annotations.
 
 Missing label stems:
 
@@ -79,106 +90,231 @@ Missing label stems:
 - `emrah_carton_hause_69`
 - `emrah_carton_hause_71`
 
-The dataset manager intentionally fails normalization by default when labels are missing, because silent data corruption is dangerous for training pipelines.
+The training preparation code automatically builds a clean dataset from the `65` labeled images.
 
-This also means the current repository does not yet contain a trained carton model. The CVAT export gives you annotations, not a ready inference model. If you run `models/yolov8n.pt`, you will get generic COCO detections such as `person`, `chair`, or `tv`.
+## Installation
 
-## Inference Commands
-
-Important:
-
-- `models/yolov8n.pt` is only the generic starting model.
-- It is not trained for your carton classes.
-- You must train a custom model first if you want detections such as `Milch_Karton_shokolade` or `Cube_Karton`.
-
-### Image
+Create a fresh virtual environment:
 
 ```bash
-python3 main.py \
-    --source image \
-    --path data/images/emrah_carton_hause_1.jpeg \
-    --model-path models/yolov8n.pt \
-    --show
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-After training, you should instead use a custom weight such as:
+If your current `.venv` activation is broken, use the interpreter directly:
 
 ```bash
-python3 main.py \
-    --source image \
-    --path data/images/emrah_carton_hause_1.jpeg \
+.venv/bin/python3
+```
+
+## Dependencies
+
+Main runtime dependencies:
+
+- `numpy`
+- `ultralytics`
+- `opencv-python`
+- `PyYAML`
+
+## Training The Custom Carton Model
+
+This is the most important step. Without it, you will not get carton class detections.
+
+Start training:
+
+```bash
+.venv/bin/python3 train.py \
+    --dataset-root data/cvat_exports/caton_hause \
+    --image-source-dir data/images \
+    --prepared-dataset-dir data/processed/caton_hause \
+    --base-model models/yolov8n.pt \
+    --epochs 50 \
+    --image-size 640 \
+    --batch-size 8 \
+    --overwrite
+```
+
+Important notes:
+
+- GPU is now selected automatically when CUDA is available.
+- On your machine, the NVIDIA RTX 2000 Ada GPU is available and should be used.
+- The prepared training dataset is created automatically before training starts.
+
+Expected trained model output:
+
+```text
+runs/train/carton_detector/weights/best.pt
+```
+
+If you create a new run name, the folder name changes accordingly.
+
+## Simplified Inference Usage
+
+The CLI is now intentionally simple.
+
+You can start modes with only one word:
+
+- `image`
+- `video`
+- `webcam`
+- `external-camera`
+
+### Image Mode
+
+```bash
+.venv/bin/python3 main.py image --model-path runs/train/carton_detector/weights/best.pt
+```
+
+Behavior:
+
+- It reads images from `data/images/` by default.
+- It shows them one after another automatically.
+- Each image stays on screen for `2` seconds by default.
+- Press `q` or `Esc` to stop playback.
+
+If you want a different delay:
+
+```bash
+.venv/bin/python3 main.py image \
     --model-path runs/train/carton_detector/weights/best.pt \
-    --show
+    --image-delay-ms 2000
 ```
 
-### Video
+If you want to open one specific image only:
 
 ```bash
-python3 main.py \
-    --source video \
-    --path path/to/video.mp4 \
-    --model-path models/yolov8n.pt \
-    --save-output
+.venv/bin/python3 main.py image \
+    --path data/images/emrah_carton_hause_1.jpeg \
+    --model-path runs/train/carton_detector/weights/best.pt
+```
+
+### Video Mode
+
+If `data/videos/` contains exactly one video, this is enough:
+
+```bash
+.venv/bin/python3 main.py video --model-path runs/train/carton_detector/weights/best.pt
+```
+
+Or specify the file:
+
+```bash
+.venv/bin/python3 main.py video \
+    --path data/videos/example.mp4 \
+    --model-path runs/train/carton_detector/weights/best.pt
 ```
 
 ### Default Webcam
 
 ```bash
-python3 main.py \
-    --source webcam \
-    --camera-index 0 \
-    --model-path models/yolov8n.pt
+.venv/bin/python3 main.py webcam --model-path runs/train/carton_detector/weights/best.pt
 ```
 
-### External USB Camera
+### External Camera
 
 ```bash
-python3 main.py \
-    --source webcam \
-    --camera-index 1 \
-    --model-path models/yolov8n.pt
+.venv/bin/python3 main.py external-camera --model-path runs/train/carton_detector/weights/best.pt
 ```
 
-### RTSP Stream
+This uses camera index `1` by default.
+
+If your external camera is on another index:
 
 ```bash
-python3 main.py \
-    --source webcam \
+.venv/bin/python3 main.py external-camera \
+    --camera-index 2 \
+    --model-path runs/train/carton_detector/weights/best.pt
+```
+
+### RTSP Camera
+
+Use webcam mode with a URL:
+
+```bash
+.venv/bin/python3 main.py webcam \
     --camera-index rtsp://username:password@camera-ip:554/stream \
-    --model-path models/yolov8n.pt
+    --model-path runs/train/carton_detector/weights/best.pt
 ```
 
-## Logging Behavior
+## Display Scaling
 
-The application now logs per-frame detection summaries. Each processed frame reports:
+Large images are automatically scaled for display.
 
-- whether any object was detected
-- total detection count
-- per-class counts
-- average confidence
+Default display limits:
 
-Example log output:
+- max width: `1280`
+- max height: `720`
 
-```text
-2026-03-23 12:00:00,000 | INFO | yolo_edge.core.detector | Loaded YOLO model from /path/to/models/yolov8n.pt
-2026-03-23 12:00:01,200 | INFO | yolo_edge.cli | source=emrah_carton_hause_1.jpeg frame=0 detected=yes total=2 classes={'Cube_Karton': 1, 'Teeschachtel': 1} average_confidence=0.8421
+You can change them:
+
+```bash
+.venv/bin/python3 main.py image \
+    --model-path runs/train/carton_detector/weights/best.pt \
+    --display-max-width 900 \
+    --display-max-height 700
 ```
 
-If no object is detected, the log shows:
+If you do not want a window:
 
-```text
-source=emrah_carton_hause_1.jpeg frame=0 detected=no total=0 classes={} average_confidence=0.0000
+```bash
+.venv/bin/python3 main.py image \
+    --model-path runs/train/carton_detector/weights/best.pt \
+    --no-show
 ```
 
-Logs are written to the console and optionally to:
+## Logging
+
+Logs are written to:
 
 ```text
 logs/application.log
 ```
 
-## Dataset Manager Usage
+Each processed frame logs:
 
-Example inspection:
+- source name
+- frame index
+- whether an object was detected
+- total detection count
+- class-wise counts
+- average confidence
+
+Example:
+
+```text
+2026-03-23 21:47:40,689 | INFO | yolo_edge.cli | source=emrah_carton_hause_1.jpeg frame=0 detected=yes total=6 classes={'chair': 2, 'person': 2, 'potted plant': 1, 'tv': 1} average_confidence=0.5268
+```
+
+If you see COCO classes like `person`, `chair`, or `tv`, that means you are still using a generic model such as `models/yolov8n.pt`, not your trained carton model.
+
+## Why The Generic Model Looked Wrong
+
+This point is critical:
+
+- `models/yolov8n.pt` is a generic pretrained YOLO model.
+- It is not trained on your carton classes.
+- Therefore it will not reliably output `Milch_Karton_shokolade`, `Cube_Karton`, and the other custom classes.
+
+To get carton predictions, use the trained file:
+
+```text
+runs/train/carton_detector/weights/best.pt
+```
+
+or the latest GPU-based run you created.
+
+## Dataset Utilities
+
+The dataset utilities can:
+
+- inspect the CVAT export
+- validate image/label consistency
+- create a clean training dataset
+- prepare YOLO-style train/val folders
+
+Programmatic example:
 
 ```python
 from pathlib import Path
@@ -187,29 +323,12 @@ from yolo_edge.data.dataset_manager import DatasetManager
 
 manager = DatasetManager()
 description = manager.inspect_dataset_directory(Path("data/cvat_exports/caton_hause"))
-
 print(description.image_count)
 print(description.label_count)
 print(description.missing_labels)
 ```
 
-Example normalization:
-
-```python
-from pathlib import Path
-
-from yolo_edge.data.dataset_manager import DatasetManager
-
-manager = DatasetManager()
-manager.prepare_cvat_export(
-    dataset_root=Path("data/cvat_exports/caton_hause"),
-    normalized_dataset_directory=Path("data/processed/caton_hause"),
-    image_source_directory=Path("data/images"),
-    overwrite=True,
-)
-```
-
-Example train/val dataset creation for training:
+Create a clean train/val dataset:
 
 ```python
 from pathlib import Path
@@ -226,34 +345,9 @@ manager.create_training_dataset(
 )
 ```
 
-## Training
-
-Train a custom carton model with:
-
-```bash
-python3 train.py \
-    --dataset-root data/cvat_exports/caton_hause \
-    --image-source-dir data/images \
-    --prepared-dataset-dir data/processed/caton_hause \
-    --base-model models/yolov8n.pt \
-    --epochs 50 \
-    --image-size 640 \
-    --batch-size 8 \
-    --device cpu \
-    --overwrite
-```
-
-Expected training result:
-
-```text
-runs/train/carton_detector/weights/best.pt
-```
-
-Once `best.pt` exists, use that file for inference instead of `models/yolov8n.pt`.
-
 ## Testing
 
-Run the tests with:
+Run the unit tests:
 
 ```bash
 python3 -m unittest discover -s tests -v
@@ -261,32 +355,41 @@ python3 -m unittest discover -s tests -v
 
 ## Git Automation
 
-The Git watcher no longer depends on `watchdog`. It now uses simple polling from the standard library, which is easier to run in minimal environments.
-
-Start it with:
+Automatic Git synchronization is available through:
 
 ```bash
 python3 auto_git_manager.py --watch-dir .
 ```
 
-## Raspberry Pi 5 Deployment
+It performs:
 
-For Raspberry Pi 5, keep the runtime conservative and CPU-focused first:
-
-```bash
-sudo apt update
-sudo apt install -y python3-venv python3-pip libatlas-base-dev libopenjp2-7 libtiff6
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install --upgrade pip
-pip install -r requirements.txt
+```text
+git add
+git commit
+git push
 ```
 
-Recommended deployment practices:
+using a simple polling-based watcher.
 
-- Start with `models/yolov8n.pt` or another nano-scale model.
-- Keep `--image-size` modest.
-- Use `--device cpu` unless you have a validated accelerator path.
-- Avoid `--show` for headless deployments.
-- Save outputs only when needed to reduce storage writes.
-- Use active cooling for sustained inference workloads.
+## Recommended Next Step
+
+If your GPU training finishes successfully, the next correct validation command is:
+
+```bash
+.venv/bin/python3 main.py image \
+    --model-path runs/train/carton_detector_gpu/weights/best.pt
+```
+
+If that run name differs, use the actual `best.pt` produced by training.
+
+## Raspberry Pi 5 Notes
+
+For Raspberry Pi deployment later:
+
+- prefer a smaller model
+- reduce image size if necessary
+- use `--no-show` in headless mode
+- save outputs only when needed
+- benchmark inference speed on the final hardware
+
+The current project structure is already prepared for that deployment path.

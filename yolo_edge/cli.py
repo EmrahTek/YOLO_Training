@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 LOGGER = logging.getLogger(__name__)
 DEFAULT_MODEL_PATH = Path("models/yolov8n.pt") if Path("models/yolov8n.pt").exists() else Path("yolov8n.pt")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_IMAGE_DIRECTORY = Path("data/images")
+DEFAULT_VIDEO_DIRECTORY = Path("data/videos")
+DEFAULT_EXTERNAL_CAMERA_INDEX = "1"
 
 
 def build_argument_parser() -> argparse.ArgumentParser:
@@ -28,7 +31,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run YOLO object detection on images, videos, webcams, or RTSP streams."
     )
-    parser.add_argument("--source", required=True, choices=("image", "video", "webcam"))
+    parser.add_argument(
+        "source",
+        choices=("image", "video", "webcam", "external-camera"),
+        help="Execution mode. Use image, video, webcam, or external-camera.",
+    )
     parser.add_argument("--path", type=Path, help="Path to an image or video file.")
     parser.add_argument(
         "--camera-index",
@@ -39,11 +46,12 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--confidence", type=float, default=0.25)
     parser.add_argument("--device", default=None)
     parser.add_argument("--image-size", type=int, default=640)
-    parser.add_argument("--show", action="store_true")
+    parser.add_argument("--no-show", action="store_true", help="Disable the visualization window.")
     parser.add_argument("--save-output", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
     parser.add_argument("--display-max-width", type=int, default=1280)
     parser.add_argument("--display-max-height", type=int, default=720)
+    parser.add_argument("--image-delay-ms", type=int, default=2000)
     parser.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     parser.add_argument("--log-dir", type=Path, default=Path("logs"))
     return parser
@@ -59,11 +67,11 @@ def parse_arguments() -> argparse.Namespace:
 
 def validate_arguments(arguments: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     """Validate source-specific argument combinations."""
-    if arguments.source in {"image", "video"} and arguments.path is None:
-        parser.error("--path is required when --source is image or video.")
+    if arguments.source in {"webcam", "external-camera"} and arguments.path is not None:
+        parser.error("--path cannot be used when source is webcam or external-camera.")
 
-    if arguments.source == "webcam" and arguments.path is not None:
-        parser.error("--path cannot be used when --source is webcam.")
+    if arguments.image_delay_ms < 1:
+        parser.error("--image-delay-ms must be greater than 0.")
 
 
 def resolve_legacy_path(path: Path | None) -> Path | None:
@@ -110,26 +118,36 @@ def run_image_inference(
     show_output: bool,
     display_max_width: int,
     display_max_height: int,
+    image_delay_milliseconds: int,
 ) -> None:
-    """Run inference on a single image."""
-    frame_packet = streamer.load_image(image_path)
-    inference_result = detector.predict(frame_packet.frame)
-    log_detection_summary(frame_packet, inference_result.summary)
+    """Run inference on one image or iterate through all images in a directory."""
+    image_paths = resolve_image_paths(image_path)
+    LOGGER.info("Image mode started with %s image(s).", len(image_paths))
 
-    if save_output:
-        output_path = output_dir / f"annotated_{image_path.name}"
-        streamer.save_image(output_path, inference_result.annotated_frame)
-        LOGGER.info("Saved annotated image to %s", output_path)
+    try:
+        for current_image_path in image_paths:
+            frame_packet = streamer.load_image(current_image_path)
+            inference_result = detector.predict(frame_packet.frame)
+            log_detection_summary(frame_packet, inference_result.summary)
 
-    if show_output:
-        streamer.display_frame(
-            "YOLO Detection",
-            inference_result.annotated_frame,
-            max_width=display_max_width,
-            max_height=display_max_height,
-        )
-        streamer.should_close_window(delay_milliseconds=0)
-        streamer.destroy_windows()
+            if save_output:
+                output_path = output_dir / f"annotated_{current_image_path.name}"
+                streamer.save_image(output_path, inference_result.annotated_frame)
+                LOGGER.info("Saved annotated image to %s", output_path)
+
+            if show_output:
+                streamer.display_frame(
+                    "YOLO Detection",
+                    inference_result.annotated_frame,
+                    max_width=display_max_width,
+                    max_height=display_max_height,
+                )
+                if streamer.should_close_window(delay_milliseconds=image_delay_milliseconds):
+                    LOGGER.info("User requested to stop image playback.")
+                    break
+    finally:
+        if show_output:
+            streamer.destroy_windows()
 
 
 def run_stream_inference(
@@ -220,6 +238,57 @@ def sanitize_source_name(source_name: str) -> str:
     return source_name.replace("://", "_").replace("/", "_").replace(":", "_").replace(" ", "_")
 
 
+def resolve_image_paths(path_argument: Path | None) -> list[Path]:
+    """Resolve image mode inputs into an ordered image list."""
+    candidate_path = resolve_legacy_path(path_argument) if path_argument is not None else DEFAULT_IMAGE_DIRECTORY
+    if candidate_path is None:
+        raise FileNotFoundError("Unable to resolve the image source path.")
+
+    candidate_path = candidate_path.resolve()
+    if candidate_path.is_file():
+        return [candidate_path]
+
+    if candidate_path.is_dir():
+        image_paths = sorted(
+            path for path in candidate_path.iterdir()
+            if path.is_file() and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp"}
+        )
+        if not image_paths:
+            raise FileNotFoundError(f"No image files were found in directory: {candidate_path}")
+        return image_paths
+
+    raise FileNotFoundError(f"Image path not found: {candidate_path}")
+
+
+def resolve_video_path(path_argument: Path | None) -> Path:
+    """Resolve a video path from an explicit file or a default data directory."""
+    candidate_path = resolve_legacy_path(path_argument) if path_argument is not None else DEFAULT_VIDEO_DIRECTORY
+    if candidate_path is None:
+        raise FileNotFoundError("Unable to resolve the video source path.")
+
+    candidate_path = candidate_path.resolve()
+    if candidate_path.is_file():
+        return candidate_path
+
+    if candidate_path.is_dir():
+        video_paths = sorted(
+            path for path in candidate_path.iterdir()
+            if path.is_file() and path.suffix.lower() in {".mp4", ".avi", ".mov", ".mkv"}
+        )
+        if len(video_paths) == 1:
+            return video_paths[0]
+        if not video_paths:
+            raise FileNotFoundError(
+                f"No video files were found in directory: {candidate_path}. "
+                "Place a video in data/videos or pass --path."
+            )
+        raise ValueError(
+            f"Multiple video files were found in {candidate_path}. Please pass --path to choose one explicitly."
+        )
+
+    raise FileNotFoundError(f"Video path not found: {candidate_path}")
+
+
 def warn_if_generic_model_for_custom_dataset(model_path: Path) -> None:
     """Log a warning when a generic pretrained model is used with a custom carton dataset project."""
     generic_model_names = {
@@ -266,6 +335,8 @@ def main() -> None:
         configure_logging(log_level=arguments.log_level, log_directory=arguments.log_dir)
         arguments.path = resolve_legacy_path(arguments.path)
         arguments.model_path = resolve_legacy_path(arguments.model_path)
+        if arguments.source == "external-camera" and arguments.camera_index == "0":
+            arguments.camera_index = DEFAULT_EXTERNAL_CAMERA_INDEX
 
         detector = ObjectDetector(
             model_path=arguments.model_path,
@@ -280,24 +351,26 @@ def main() -> None:
             run_image_inference(
                 detector=detector,
                 streamer=streamer,
-                image_path=arguments.path,
+                image_path=arguments.path if arguments.path is not None else DEFAULT_IMAGE_DIRECTORY,
                 save_output=arguments.save_output,
                 output_dir=arguments.output_dir,
-                show_output=arguments.show,
+                show_output=not arguments.no_show,
                 display_max_width=arguments.display_max_width,
                 display_max_height=arguments.display_max_height,
+                image_delay_milliseconds=arguments.image_delay_ms,
             )
             return
 
         if arguments.source == "video":
+            video_path = resolve_video_path(arguments.path)
             run_stream_inference(
                 detector=detector,
                 streamer=streamer,
-                source=arguments.path,
-                source_name=arguments.path.name,
+                source=video_path,
+                source_name=video_path.name,
                 save_output=arguments.save_output,
                 output_dir=arguments.output_dir,
-                show_output=arguments.show,
+                show_output=not arguments.no_show,
                 display_max_width=arguments.display_max_width,
                 display_max_height=arguments.display_max_height,
             )
@@ -310,7 +383,7 @@ def main() -> None:
             source_name=str(arguments.camera_index),
             save_output=arguments.save_output,
             output_dir=arguments.output_dir,
-            show_output=arguments.show,
+            show_output=not arguments.no_show,
             display_max_width=arguments.display_max_width,
             display_max_height=arguments.display_max_height,
         )
