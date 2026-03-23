@@ -101,12 +101,33 @@ python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
 pip install -r requirements.txt
+.venv/bin/python3 tools/install_shortcuts.py
 ```
+
+This installs the shortcut commands into `.venv/bin`.
 
 If your current `.venv` activation is broken, use the interpreter directly:
 
 ```bash
 .venv/bin/python3
+```
+
+If activation works correctly, these commands become available directly:
+
+```bash
+image
+video
+webcam
+external-camera
+```
+
+You can also run them without activating the environment:
+
+```bash
+.venv/bin/image
+.venv/bin/video
+.venv/bin/webcam
+.venv/bin/external-camera
 ```
 
 ## Dependencies
@@ -161,10 +182,12 @@ You can start modes with only one word:
 - `webcam`
 - `external-camera`
 
+Because shell commands cannot contain spaces, use `external-camera` or `external_camera`.
+
 ### Image Mode
 
 ```bash
-.venv/bin/python3 main.py image --model-path runs/train/carton_detector/weights/best.pt
+image --model-path runs/train/carton_detector/weights/best.pt
 ```
 
 Behavior:
@@ -177,7 +200,7 @@ Behavior:
 If you want a different delay:
 
 ```bash
-.venv/bin/python3 main.py image \
+image \
     --model-path runs/train/carton_detector/weights/best.pt \
     --image-delay-ms 2000
 ```
@@ -185,7 +208,7 @@ If you want a different delay:
 If you want to open one specific image only:
 
 ```bash
-.venv/bin/python3 main.py image \
+image \
     --path data/images/emrah_carton_hause_1.jpeg \
     --model-path runs/train/carton_detector/weights/best.pt
 ```
@@ -195,13 +218,13 @@ If you want to open one specific image only:
 If `data/videos/` contains exactly one video, this is enough:
 
 ```bash
-.venv/bin/python3 main.py video --model-path runs/train/carton_detector/weights/best.pt
+video --model-path runs/train/carton_detector/weights/best.pt
 ```
 
 Or specify the file:
 
 ```bash
-.venv/bin/python3 main.py video \
+video \
     --path data/videos/example.mp4 \
     --model-path runs/train/carton_detector/weights/best.pt
 ```
@@ -209,13 +232,13 @@ Or specify the file:
 ### Default Webcam
 
 ```bash
-.venv/bin/python3 main.py webcam --model-path runs/train/carton_detector/weights/best.pt
+webcam --model-path runs/train/carton_detector/weights/best.pt
 ```
 
 ### External Camera
 
 ```bash
-.venv/bin/python3 main.py external-camera --model-path runs/train/carton_detector/weights/best.pt
+external-camera --model-path runs/train/carton_detector/weights/best.pt
 ```
 
 This uses camera index `1` by default.
@@ -223,7 +246,7 @@ This uses camera index `1` by default.
 If your external camera is on another index:
 
 ```bash
-.venv/bin/python3 main.py external-camera \
+external-camera \
     --camera-index 2 \
     --model-path runs/train/carton_detector/weights/best.pt
 ```
@@ -233,7 +256,7 @@ If your external camera is on another index:
 Use webcam mode with a URL:
 
 ```bash
-.venv/bin/python3 main.py webcam \
+webcam \
     --camera-index rtsp://username:password@camera-ip:554/stream \
     --model-path runs/train/carton_detector/weights/best.pt
 ```
@@ -250,7 +273,7 @@ Default display limits:
 You can change them:
 
 ```bash
-.venv/bin/python3 main.py image \
+image \
     --model-path runs/train/carton_detector/weights/best.pt \
     --display-max-width 900 \
     --display-max-height 700
@@ -259,7 +282,7 @@ You can change them:
 If you do not want a window:
 
 ```bash
-.venv/bin/python3 main.py image \
+image \
     --model-path runs/train/carton_detector/weights/best.pt \
     --no-show
 ```
@@ -376,7 +399,7 @@ using a simple polling-based watcher.
 If your GPU training finishes successfully, the next correct validation command is:
 
 ```bash
-.venv/bin/python3 main.py image \
+image \
     --model-path runs/train/carton_detector_gpu/weights/best.pt
 ```
 
