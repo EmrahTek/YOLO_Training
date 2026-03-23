@@ -100,9 +100,20 @@ class VideoStreamer:
         if capture.isOpened():
             capture.release()
 
-    def display_frame(self, window_name: str, frame: np.ndarray) -> None:
-        """Display a frame for interactive inspection."""
-        cv2.imshow(window_name, frame)
+    def display_frame(
+        self,
+        window_name: str,
+        frame: np.ndarray,
+        max_width: int | None = None,
+        max_height: int | None = None,
+    ) -> None:
+        """Display a frame for interactive inspection with optional scaling."""
+        display_frame = self.resize_for_display(
+            frame=frame,
+            max_width=max_width,
+            max_height=max_height,
+        )
+        cv2.imshow(window_name, display_frame)
 
     def should_close_window(self, delay_milliseconds: int = 1) -> bool:
         """Return True when the user presses a close shortcut."""
@@ -112,6 +123,28 @@ class VideoStreamer:
     def destroy_windows(self) -> None:
         """Close all OpenCV windows."""
         cv2.destroyAllWindows()
+
+    def resize_for_display(
+        self,
+        frame: np.ndarray,
+        max_width: int | None = None,
+        max_height: int | None = None,
+    ) -> np.ndarray:
+        """Resize a frame for display while preserving aspect ratio."""
+        if max_width is None and max_height is None:
+            return frame
+
+        frame_height, frame_width = frame.shape[:2]
+        width_scale = (max_width / frame_width) if max_width is not None else 1.0
+        height_scale = (max_height / frame_height) if max_height is not None else 1.0
+        scale = min(width_scale, height_scale, 1.0)
+
+        if scale >= 1.0:
+            return frame
+
+        resized_width = max(1, int(frame_width * scale))
+        resized_height = max(1, int(frame_height * scale))
+        return cv2.resize(frame, (resized_width, resized_height), interpolation=cv2.INTER_AREA)
 
     def normalize_source(self, source: int | str | Path) -> int | str:
         """Normalize CLI source values for OpenCV."""

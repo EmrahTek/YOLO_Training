@@ -95,6 +95,21 @@ class ObjectDetector:
             annotated_frame=annotated_frame,
         )
 
+    @property
+    def model_path(self) -> Path:
+        """Return the resolved model path."""
+        return self._model_path
+
+    @property
+    def model_class_names(self) -> tuple[str, ...]:
+        """Return model class names when available."""
+        names = getattr(self._model, "names", {})
+        if isinstance(names, dict):
+            return tuple(str(value) for _, value in sorted(names.items()))
+        if isinstance(names, (list, tuple)):
+            return tuple(str(value) for value in names)
+        return tuple()
+
     def _extract_detections(self, result: Any) -> tuple[Detection, ...]:
         """Convert Ultralytics results into serializable domain objects."""
         if result.boxes is None:

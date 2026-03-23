@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 import sys
 from typing import TYPE_CHECKING
+import yaml
 
 from yolo_edge.utils.logging_utils import configure_logging
 
@@ -41,6 +42,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--save-output", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
+    parser.add_argument("--display-max-width", type=int, default=1280)
+    parser.add_argument("--display-max-height", type=int, default=720)
     parser.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     parser.add_argument("--log-dir", type=Path, default=Path("logs"))
     return parser
@@ -105,6 +108,8 @@ def run_image_inference(
     save_output: bool,
     output_dir: Path,
     show_output: bool,
+    display_max_width: int,
+    display_max_height: int,
 ) -> None:
     """Run inference on a single image."""
     frame_packet = streamer.load_image(image_path)
@@ -117,7 +122,12 @@ def run_image_inference(
         LOGGER.info("Saved annotated image to %s", output_path)
 
     if show_output:
-        streamer.display_frame("YOLO Detection", inference_result.annotated_frame)
+        streamer.display_frame(
+            "YOLO Detection",
+            inference_result.annotated_frame,
+            max_width=display_max_width,
+            max_height=display_max_height,
+        )
         streamer.should_close_window(delay_milliseconds=0)
         streamer.destroy_windows()
 
@@ -130,6 +140,8 @@ def run_stream_inference(
     save_output: bool,
     output_dir: Path,
     show_output: bool,
+    display_max_width: int,
+    display_max_height: int,
 ) -> None:
     """Run frame-by-frame inference for a video file or live stream."""
     capture = streamer.open_video_capture(source)
@@ -164,7 +176,12 @@ def run_stream_inference(
                 writer.write(inference_result.annotated_frame)
 
             if show_output:
-                streamer.display_frame("YOLO Detection", inference_result.annotated_frame)
+                streamer.display_frame(
+                    "YOLO Detection",
+                    inference_result.annotated_frame,
+                    max_width=display_max_width,
+                    max_height=display_max_height,
+                )
                 if streamer.should_close_window():
                     LOGGER.info("User requested to close the visualization window.")
                     break
@@ -203,6 +220,40 @@ def sanitize_source_name(source_name: str) -> str:
     return source_name.replace("://", "_").replace("/", "_").replace(":", "_").replace(" ", "_")
 
 
+def warn_if_generic_model_for_custom_dataset(model_path: Path) -> None:
+    """Log a warning when a generic pretrained model is used with a custom carton dataset project."""
+    generic_model_names = {
+        "yolov8n.pt",
+        "yolov8s.pt",
+        "yolov8m.pt",
+        "yolov8l.pt",
+        "yolov8x.pt",
+        "yolo11n.pt",
+        "yolo11s.pt",
+        "yolo11m.pt",
+        "yolo11l.pt",
+        "yolo11x.pt",
+    }
+    if model_path.name not in generic_model_names:
+        return
+
+    dataset_yaml_path = PROJECT_ROOT / "data" / "cvat_exports" / "caton_hause" / "data.yaml"
+    if not dataset_yaml_path.exists():
+        return
+
+    with dataset_yaml_path.open("r", encoding="utf-8") as yaml_file:
+        yaml_content = yaml.safe_load(yaml_file) or {}
+
+    dataset_names = yaml_content.get("names", {})
+    custom_classes = [str(value) for _, value in sorted(dataset_names.items())]
+    LOGGER.warning(
+        "You are using a generic pretrained model (%s). It will detect default COCO classes, not your custom carton classes %s. "
+        "To detect cartons correctly, you need a model trained on this dataset.",
+        model_path.name,
+        custom_classes,
+    )
+
+
 def main() -> None:
     """Run the object detection application."""
     configure_logging()
@@ -222,6 +273,7 @@ def main() -> None:
             device=arguments.device,
             image_size=arguments.image_size,
         )
+        warn_if_generic_model_for_custom_dataset(arguments.model_path)
         streamer = VideoStreamer()
 
         if arguments.source == "image":
@@ -232,6 +284,8 @@ def main() -> None:
                 save_output=arguments.save_output,
                 output_dir=arguments.output_dir,
                 show_output=arguments.show,
+                display_max_width=arguments.display_max_width,
+                display_max_height=arguments.display_max_height,
             )
             return
 
@@ -244,6 +298,8 @@ def main() -> None:
                 save_output=arguments.save_output,
                 output_dir=arguments.output_dir,
                 show_output=arguments.show,
+                display_max_width=arguments.display_max_width,
+                display_max_height=arguments.display_max_height,
             )
             return
 
@@ -255,6 +311,8 @@ def main() -> None:
             save_output=arguments.save_output,
             output_dir=arguments.output_dir,
             show_output=arguments.show,
+            display_max_width=arguments.display_max_width,
+            display_max_height=arguments.display_max_height,
         )
     except ModuleNotFoundError as error:
         LOGGER.error("%s", error)
