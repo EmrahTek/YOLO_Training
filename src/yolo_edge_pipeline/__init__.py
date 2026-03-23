@@ -1,1 +1,0 @@
-"""YOLO edge inference package."""

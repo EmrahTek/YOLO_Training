@@ -1,6 +1,6 @@
 # YOLO Edge Detection Pipeline
 
-This project is a modular and production-oriented YOLO object detection codebase designed for lightweight execution, clean maintenance, and future Raspberry Pi 5 deployment. The architecture uses a package-based layout, structured logging, compatibility entry points, and automated tests.
+This project is a modular and production-oriented YOLO object detection codebase designed for lightweight execution, clean maintenance, and future Raspberry Pi 5 deployment. The architecture now keeps the main implementation directly in the root Python files, adds structured logging, and includes automated tests.
 
 ## Dataset Analysis Of `Caton_Hause.zip`
 
@@ -45,29 +45,13 @@ This is exactly why the dataset manager was rewritten. A production pipeline sho
 ├── video_streamer.py
 ├── dataset_manager.py
 ├── auto_git_manager.py
-├── src/
-│   └── yolo_edge_pipeline/
-│       ├── __init__.py
-│       ├── cli.py
-│       ├── core/
-│       │   ├── __init__.py
-│       │   ├── detector.py
-│       │   └── video_streamer.py
-│       ├── data/
-│       │   ├── __init__.py
-│       │   └── dataset_manager.py
-│       ├── tools/
-│       │   ├── __init__.py
-│       │   └── auto_git_manager.py
-│       └── utils/
-│           ├── __init__.py
-│           └── logging_utils.py
+├── logging_utils.py
 └── tests/
     ├── test_cli.py
     └── test_dataset_manager.py
 ```
 
-The root-level Python files remain available as thin compatibility entry points, while the actual implementation lives under `src/yolo_edge_pipeline/`.
+All root-level Python files are now the actual implementation files, which keeps the project easier to inspect in an IDE and avoids wrapper-related confusion.
 
 ## Prerequisites
 
@@ -264,10 +248,9 @@ python3 main.py \
 
 ## Design Notes
 
-Key architectural decisions in this refactor:
+Key architectural decisions in this final version:
 
-- Package-based source layout for cleaner boundaries.
-- Thin root entry points for simple execution.
+- Root-level implementation files to keep the project simple and IDE-friendly.
 - Logging separated into a shared utility module.
 - Dataset validation aligned with the actual CVAT export you provided.
 - Tests added to prevent regressions in CLI and dataset logic.

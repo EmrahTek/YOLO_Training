@@ -2,19 +2,14 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 import tempfile
 import unittest
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-SOURCE_DIRECTORY = PROJECT_ROOT / "src"
-if str(SOURCE_DIRECTORY) not in sys.path:
-    sys.path.insert(0, str(SOURCE_DIRECTORY))
 
-from yolo_edge_pipeline.data.dataset_manager import DatasetManager
-from yolo_edge_pipeline.data.dataset_manager import DatasetValidationError
+from dataset_manager import DatasetManager
+from dataset_manager import DatasetValidationError
 
 
 class DatasetManagerTestCase(unittest.TestCase):
