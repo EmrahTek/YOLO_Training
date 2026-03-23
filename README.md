@@ -106,6 +106,13 @@ pip install -r requirements.txt
 
 This installs the shortcut commands into `.venv/bin`.
 
+Tested and confirmed working on this project:
+
+```bash
+.venv/bin/image --model-path runs/train/carton_detector_gpu/weights/best.pt
+.venv/bin/webcam --model-path runs/train/carton_detector_gpu/weights/best.pt
+```
+
 If your current `.venv` activation is broken, use the interpreter directly:
 
 ```bash
@@ -171,6 +178,12 @@ runs/train/carton_detector/weights/best.pt
 
 If you create a new run name, the folder name changes accordingly.
 
+If you trained with the GPU run name used in this repository, your actual model may be:
+
+```text
+runs/train/carton_detector_gpu/weights/best.pt
+```
+
 ## Simplified Inference Usage
 
 The CLI is now intentionally simple.
@@ -187,7 +200,7 @@ Because shell commands cannot contain spaces, use `external-camera` or `external
 ### Image Mode
 
 ```bash
-image --model-path runs/train/carton_detector/weights/best.pt
+.venv/bin/image --model-path runs/train/carton_detector_gpu/weights/best.pt
 ```
 
 Behavior:
@@ -200,17 +213,17 @@ Behavior:
 If you want a different delay:
 
 ```bash
-image \
-    --model-path runs/train/carton_detector/weights/best.pt \
+.venv/bin/image \
+    --model-path runs/train/carton_detector_gpu/weights/best.pt \
     --image-delay-ms 2000
 ```
 
 If you want to open one specific image only:
 
 ```bash
-image \
+.venv/bin/image \
     --path data/images/emrah_carton_hause_1.jpeg \
-    --model-path runs/train/carton_detector/weights/best.pt
+    --model-path runs/train/carton_detector_gpu/weights/best.pt
 ```
 
 ### Video Mode
@@ -218,27 +231,27 @@ image \
 If `data/videos/` contains exactly one video, this is enough:
 
 ```bash
-video --model-path runs/train/carton_detector/weights/best.pt
+.venv/bin/video --model-path runs/train/carton_detector_gpu/weights/best.pt
 ```
 
 Or specify the file:
 
 ```bash
-video \
+.venv/bin/video \
     --path data/videos/example.mp4 \
-    --model-path runs/train/carton_detector/weights/best.pt
+    --model-path runs/train/carton_detector_gpu/weights/best.pt
 ```
 
 ### Default Webcam
 
 ```bash
-webcam --model-path runs/train/carton_detector/weights/best.pt
+.venv/bin/webcam --model-path runs/train/carton_detector_gpu/weights/best.pt
 ```
 
 ### External Camera
 
 ```bash
-external-camera --model-path runs/train/carton_detector/weights/best.pt
+.venv/bin/external-camera --model-path runs/train/carton_detector_gpu/weights/best.pt
 ```
 
 This uses camera index `1` by default.
@@ -246,9 +259,9 @@ This uses camera index `1` by default.
 If your external camera is on another index:
 
 ```bash
-external-camera \
+.venv/bin/external-camera \
     --camera-index 2 \
-    --model-path runs/train/carton_detector/weights/best.pt
+    --model-path runs/train/carton_detector_gpu/weights/best.pt
 ```
 
 ### RTSP Camera
@@ -256,9 +269,9 @@ external-camera \
 Use webcam mode with a URL:
 
 ```bash
-webcam \
+.venv/bin/webcam \
     --camera-index rtsp://username:password@camera-ip:554/stream \
-    --model-path runs/train/carton_detector/weights/best.pt
+    --model-path runs/train/carton_detector_gpu/weights/best.pt
 ```
 
 ## Display Scaling
@@ -273,8 +286,8 @@ Default display limits:
 You can change them:
 
 ```bash
-image \
-    --model-path runs/train/carton_detector/weights/best.pt \
+.venv/bin/image \
+    --model-path runs/train/carton_detector_gpu/weights/best.pt \
     --display-max-width 900 \
     --display-max-height 700
 ```
@@ -282,8 +295,8 @@ image \
 If you do not want a window:
 
 ```bash
-image \
-    --model-path runs/train/carton_detector/weights/best.pt \
+.venv/bin/image \
+    --model-path runs/train/carton_detector_gpu/weights/best.pt \
     --no-show
 ```
 
@@ -323,7 +336,7 @@ This point is critical:
 To get carton predictions, use the trained file:
 
 ```text
-runs/train/carton_detector/weights/best.pt
+runs/train/carton_detector_gpu/weights/best.pt
 ```
 
 or the latest GPU-based run you created.
@@ -399,7 +412,7 @@ using a simple polling-based watcher.
 If your GPU training finishes successfully, the next correct validation command is:
 
 ```bash
-image \
+.venv/bin/image \
     --model-path runs/train/carton_detector_gpu/weights/best.pt
 ```
 
