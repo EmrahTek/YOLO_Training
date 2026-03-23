@@ -75,6 +75,7 @@ outputs/
 *.avi
 *.mov
 *.mkv
+*.jpeg
 
 # =========================
 # Local datasets
