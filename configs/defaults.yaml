@@ -1,0 +1,51 @@
+predict:
+  model_path: models/yolov8n.pt
+  confidence: 0.25
+  device:
+  image_size: 640
+  image_directory: data/images
+  video_directory: data/videos
+  output_directory: outputs
+  log_directory: logs
+  log_level: INFO
+  display_max_width: 1280
+  display_max_height: 720
+  image_delay_ms: 2000
+  default_camera_index: "0"
+  external_camera_index: "1"
+
+dataset:
+  dataset_root: data/cvat_exports/caton_hause
+  image_source_directory: data/images
+  prepared_dataset_directory: data/processed/caton_hause
+  validation_ratio: 0.2
+  random_seed: 42
+  allow_missing_labels: false
+
+train:
+  base_model: models/yolov8n.pt
+  epochs: 50
+  image_size: 640
+  batch_size: 8
+  device:
+  project_directory: runs/train
+  run_name: carton_detector_gpu
+  patience: 20
+  workers: 2
+  cache: false
+  resume: false
+
+export:
+  source_model: runs/train/carton_detector_gpu/weights/best.pt
+  export_directory: runs/export
+  formats:
+    - onnx
+    - openvino
+    - tflite
+  image_size: 640
+  half: false
+  int8: false
+  dynamic: false
+  device:
+  benchmark_image: data/images/emrah_carton_hause_1.jpeg
+  benchmark_runs: 10

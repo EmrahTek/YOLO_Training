@@ -11,22 +11,27 @@ VENV_BIN_DIRECTORY = PROJECT_ROOT / ".venv" / "bin"
 PYTHON_PATH = VENV_BIN_DIRECTORY / "python3"
 MAIN_PATH = PROJECT_ROOT / "main.py"
 
-COMMAND_TO_MODE = {
-    "image": "image",
-    "video": "video",
-    "webcam": "webcam",
-    "external-camera": "external-camera",
-    "external_camera": "external-camera",
+COMMAND_TO_ARGUMENTS = {
+    "image": ("image",),
+    "video": ("video",),
+    "webcam": ("webcam",),
+    "external-camera": ("external-camera",),
+    "external_camera": ("external-camera",),
+    "inspect-dataset": ("inspect-dataset",),
+    "prepare-dataset": ("prepare-dataset",),
+    "train-carton": ("train",),
+    "export-edge": ("export",),
 }
 
 
-def build_launcher_script(mode: str) -> str:
+def build_launcher_script(arguments: tuple[str, ...]) -> str:
     """Build the shell script content for one launcher command."""
+    quoted_arguments = " ".join(f'"{argument}"' for argument in arguments)
     return "\n".join(
         [
             "#!/usr/bin/env bash",
             'set -euo pipefail',
-            f'exec "{PYTHON_PATH}" "{MAIN_PATH}" "{mode}" "$@"',
+            f'exec "{PYTHON_PATH}" "{MAIN_PATH}" {quoted_arguments} "$@"',
             "",
         ]
     )
@@ -40,9 +45,9 @@ def install_shortcuts() -> None:
     if not PYTHON_PATH.exists():
         raise FileNotFoundError(f"Virtual environment interpreter not found: {PYTHON_PATH}")
 
-    for command_name, mode in COMMAND_TO_MODE.items():
+    for command_name, arguments in COMMAND_TO_ARGUMENTS.items():
         launcher_path = VENV_BIN_DIRECTORY / command_name
-        launcher_path.write_text(build_launcher_script(mode), encoding="utf-8")
+        launcher_path.write_text(build_launcher_script(arguments), encoding="utf-8")
         launcher_path.chmod(0o755)
         print(f"Installed launcher: {launcher_path}")
 

@@ -42,8 +42,10 @@ class DatasetDescription:
     class_names: dict[int, str]
     image_count: int
     label_count: int
+    labeled_image_count: int
     missing_images: tuple[str, ...]
     missing_labels: tuple[str, ...]
+    invalid_label_files: tuple[str, ...]
     issues: tuple[DatasetIssue, ...]
 
     @property
@@ -133,6 +135,7 @@ class DatasetManager:
         label_stems = {label_path.stem for label_path in label_files}
         missing_labels = sorted(image_stems - label_stems)
         label_count = len(label_files)
+        invalid_label_files = self._validate_label_files(label_files, class_names)
 
         if missing_labels:
             issues.append(
@@ -141,6 +144,16 @@ class DatasetManager:
                     message=(
                         f"The dataset contains {len(missing_labels)} images without labels. "
                         "Strict training should not continue until this is fixed."
+                    ),
+                )
+            )
+        if invalid_label_files:
+            issues.append(
+                DatasetIssue(
+                    severity="error",
+                    message=(
+                        f"The dataset contains {len(invalid_label_files)} invalid label file(s). "
+                        "Fix malformed annotations before training."
                     ),
                 )
             )
@@ -154,8 +167,10 @@ class DatasetManager:
             class_names=class_names,
             image_count=image_count,
             label_count=label_count,
+            labeled_image_count=len(sorted(image_stems & label_stems)),
             missing_images=tuple(sorted(missing_images)),
             missing_labels=tuple(missing_labels),
+            invalid_label_files=tuple(invalid_label_files),
             issues=tuple(issues),
         )
 
@@ -243,6 +258,16 @@ class DatasetManager:
             output_directory=output_directory,
             class_names=description.class_names,
         )
+        self._write_dataset_report(
+            output_directory=output_directory,
+            description=description,
+            train_image_names=tuple(
+                image_name for image_name in shuffled_image_names if image_name not in validation_names
+            ),
+            validation_image_names=tuple(sorted(validation_names)),
+            validation_ratio=validation_ratio,
+            random_seed=random_seed,
+        )
         LOGGER.info(
             "Created training dataset at %s with train=%s val=%s labeled_samples=%s",
             output_directory,
@@ -314,6 +339,74 @@ class DatasetManager:
         }
         with data_yaml_path.open("w", encoding="utf-8") as yaml_file:
             yaml.safe_dump(yaml_content, yaml_file, sort_keys=False)
+
+    def _write_dataset_report(
+        self,
+        output_directory: Path,
+        description: DatasetDescription,
+        train_image_names: tuple[str, ...],
+        validation_image_names: tuple[str, ...],
+        validation_ratio: float,
+        random_seed: int,
+    ) -> None:
+        """Write a dataset quality and split report for reproducibility."""
+        report_path = output_directory / "dataset_report.yaml"
+        report_payload = {
+            "dataset_root": str(description.dataset_root),
+            "image_count": description.image_count,
+            "label_count": description.label_count,
+            "labeled_image_count": description.labeled_image_count,
+            "missing_images": list(description.missing_images),
+            "missing_labels": list(description.missing_labels),
+            "invalid_label_files": list(description.invalid_label_files),
+            "class_names": description.class_names,
+            "validation_ratio": validation_ratio,
+            "random_seed": random_seed,
+            "train_images": list(train_image_names),
+            "validation_images": list(validation_image_names),
+            "issues": [
+                {"severity": issue.severity, "message": issue.message}
+                for issue in description.issues
+            ],
+        }
+        with report_path.open("w", encoding="utf-8") as report_file:
+            yaml.safe_dump(report_payload, report_file, sort_keys=False)
+
+    def _validate_label_files(self, label_files: list[Path], class_names: dict[int, str]) -> list[str]:
+        """Validate YOLO label file content and return relative invalid paths."""
+        invalid_label_files: list[str] = []
+        known_class_ids = set(class_names.keys())
+        has_declared_classes = bool(known_class_ids)
+
+        for label_path in label_files:
+            try:
+                with label_path.open("r", encoding="utf-8") as label_file:
+                    for line_number, line in enumerate(label_file.readlines(), start=1):
+                        stripped_line = line.strip()
+                        if not stripped_line:
+                            continue
+
+                        parts = stripped_line.split()
+                        if len(parts) != 5:
+                            raise DatasetValidationError(
+                                f"Invalid annotation format in {label_path} line {line_number}: {stripped_line}"
+                            )
+
+                        class_id = int(parts[0])
+                        coordinates = [float(value) for value in parts[1:]]
+                        if has_declared_classes and class_id not in known_class_ids:
+                            raise DatasetValidationError(
+                                f"Unknown class id {class_id} in {label_path} line {line_number}"
+                            )
+
+                        if any(value < 0.0 or value > 1.0 for value in coordinates):
+                            raise DatasetValidationError(
+                                f"Out-of-range normalized coordinates in {label_path} line {line_number}"
+                            )
+            except (OSError, ValueError, DatasetValidationError):
+                invalid_label_files.append(str(label_path))
+
+        return sorted(invalid_label_files)
 
     def _build_image_lookup(self, image_source_directory: Path | None) -> dict[str, Path]:
         """Build an image name to path lookup from an optional local image directory."""

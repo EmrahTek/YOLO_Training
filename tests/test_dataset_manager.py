@@ -26,7 +26,9 @@ class DatasetManagerTestCase(unittest.TestCase):
 
         self.assertEqual(description.image_count, 74)
         self.assertEqual(description.label_count, 65)
+        self.assertEqual(description.labeled_image_count, 65)
         self.assertEqual(len(description.missing_labels), 9)
+        self.assertEqual(len(description.invalid_label_files), 0)
         self.assertIn("emrah_carton_hause_71", description.missing_labels)
 
     def test_prepare_cvat_export_rejects_missing_labels(self) -> None:
@@ -61,10 +63,12 @@ class DatasetManagerTestCase(unittest.TestCase):
             val_images = list((prepared_dataset / "images" / "val").glob("*.jpeg"))
             train_labels = list((prepared_dataset / "labels" / "train").glob("*.txt"))
             val_labels = list((prepared_dataset / "labels" / "val").glob("*.txt"))
+            dataset_report = prepared_dataset / "dataset_report.yaml"
 
             self.assertEqual(len(train_images) + len(val_images), 65)
             self.assertEqual(len(train_images), len(train_labels))
             self.assertEqual(len(val_images), len(val_labels))
+            self.assertTrue(dataset_report.is_file())
 
 
 if __name__ == "__main__":
