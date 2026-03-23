@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib.util
 import logging
 from pathlib import Path
 import shutil
@@ -54,6 +55,7 @@ class EdgeExporter:
         export_directory = export_directory.resolve()
         export_directory.mkdir(parents=True, exist_ok=True)
 
+        self._validate_export_dependencies(formats)
         model = YOLO(str(resolved_model_path))
         self._write_labels_file(export_directory=export_directory, model=model)
         artifacts: list[ExportArtifact] = []
@@ -192,3 +194,40 @@ class EdgeExporter:
 
         labels_path.write_text("\n".join(ordered_names) + ("\n" if ordered_names else ""), encoding="utf-8")
         LOGGER.info("Saved labels file to %s", labels_path)
+
+    def _validate_export_dependencies(self, formats: tuple[str, ...]) -> None:
+        """Fail early when export dependencies are missing instead of relying on implicit auto-installs."""
+        required_modules: set[str] = set()
+        normalized_formats = {format_name.lower() for format_name in formats}
+
+        if "onnx" in normalized_formats:
+            required_modules.update({"onnx", "onnxruntime", "onnxslim"})
+        if "openvino" in normalized_formats:
+            required_modules.add("openvino")
+        if "tflite" in normalized_formats:
+            required_modules.add("tensorflow")
+
+        missing_modules = sorted(
+            module_name for module_name in required_modules
+            if importlib.util.find_spec(module_name) is None
+        )
+        if not missing_modules:
+            return
+
+        install_hint = self._build_install_hint(missing_modules)
+        raise ModuleNotFoundError(
+            "Missing export dependencies for the requested formats: "
+            f"{missing_modules}. Install them first with: {install_hint}"
+        )
+
+    def _build_install_hint(self, missing_modules: list[str]) -> str:
+        """Build a deterministic install command for missing export dependencies."""
+        requirement_map = {
+            "onnx": "onnx>=1.12.0,<=1.19.1",
+            "onnxruntime": "onnxruntime",
+            "onnxslim": "onnxslim>=0.1.71",
+            "openvino": "openvino",
+            "tensorflow": "tensorflow",
+        }
+        packages = [requirement_map[module_name] for module_name in missing_modules]
+        return ".venv/bin/pip install " + " ".join(packages)

@@ -336,6 +336,18 @@ The export workflow also writes:
 - `labels.txt`
 - `edge_export_manifest.yaml`
 
+Before running export, install the export-specific dependencies:
+
+```bash
+.venv/bin/pip install -r requirements-export.txt
+```
+
+Important note:
+
+- export dependencies are intentionally separated from `requirements.txt`
+- this keeps the base project lighter for training and inference
+- if export packages are missing, the export command now fails early with a clear install hint instead of hanging in an implicit auto-install step
+
 If a benchmark image is configured, the native `.pt` model is also benchmarked and the latency summary is logged.
 
 ## Logging

@@ -1,0 +1,5 @@
+onnx>=1.12.0,<=1.19.1
+onnxruntime
+onnxslim>=0.1.71
+openvino
+tensorflow
