@@ -307,6 +307,40 @@ Manual training command:
     --overwrite
 ```
 
+### GPU Training
+
+Use the first CUDA GPU explicitly:
+
+```bash
+.venv/bin/python3 train.py \
+    --dataset-root data/cvat_exports/caton_hause \
+    --image-source-dir data/images \
+    --prepared-dataset-dir data/processed/caton_hause \
+    --base-model models/yolov8n.pt \
+    --epochs 50 \
+    --image-size 640 \
+    --batch-size 8 \
+    --device 0 \
+    --overwrite
+```
+
+### CPU Training
+
+Force training on the CPU:
+
+```bash
+.venv/bin/python3 train.py \
+    --dataset-root data/cvat_exports/caton_hause \
+    --image-source-dir data/images \
+    --prepared-dataset-dir data/processed/caton_hause \
+    --base-model models/yolov8n.pt \
+    --epochs 50 \
+    --image-size 640 \
+    --batch-size 8 \
+    --device cpu \
+    --overwrite
+```
+
 Training improvements currently included:
 
 - automatic GPU usage when CUDA is available
