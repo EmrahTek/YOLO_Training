@@ -1,0 +1,179 @@
+Create a clear, student-friendly presentation in German based only on the uploaded project files for the repository "YOLO_Nachhaltigkeit". The audience is me and my classmates. I worked on carton/cardboard detection, while my teammates will work on metal and plastic, and later we will combine all parts into one larger recycling project. The presentation must help non-experts understand both the project idea and the AI/technical implementation.
+
+Important output constraints:
+- Write the presentation in German.
+- Keep it detailed but easy to understand.
+- Maximum 20 slides.
+- Use short slide titles and clear bullet points.
+- Include one final summary slide and one final "next steps" slide.
+- Do not invent methods, metrics, or experiments that are not supported by the uploaded files.
+- If something is not explicitly implemented in the project, say that clearly.
+
+Core goal of the presentation:
+Explain how this project was built, what AI methods were actually used, how the custom model was created, how the dataset was prepared, how training and inference work, what engineering structure was added around the model, and how this carton project can later be combined with metal and plastic contributions from teammates.
+
+Please structure the presentation roughly like this:
+
+1. Project introduction
+- What the project is about.
+- Why carton detection matters in a recycling/sustainability context.
+- How this work fits into a larger team project with carton, metal, and plastic.
+
+2. Problem statement
+- Why generic pretrained object detection models are not enough for very specific carton classes.
+- Why a custom model is needed.
+
+3. Dataset origin
+- Explain that the project started from a CVAT YOLO export.
+- Mention that the dataset root is configured as `data/cvat_exports/caton_hause`.
+- Explain that images come from `data/images`.
+
+4. Existing custom classes
+- Present the current custom classes exactly as found in the repository:
+  - Milch_Karton_shokolade
+  - Miclh_Karton_Vanille
+  - Teeschachtel
+  - Cube_Karton
+- Explain that these are custom domain classes and not standard COCO classes.
+
+5. Dataset quality inspection
+- Explain that the repository contains a dataset inspection and validation workflow.
+- Mention the concrete findings from the project files:
+  - `train.txt` references 74 images
+  - 65 label files exist
+  - 9 images are missing labels
+  - training uses only the labeled subset
+  - label structure and normalized coordinates are validated
+- Explain why data quality checks are important in AI projects.
+
+6. Data preparation pipeline
+- Explain how the project creates a cleaned training dataset.
+- Mention that only labeled samples are used.
+- Explain that the code creates train/validation splits automatically.
+- Mention the configured validation ratio of 0.2 and random seed 42.
+- Explain why reproducibility matters.
+
+7. AI method used
+- State clearly that this project uses supervised object detection with Ultralytics YOLO.
+- Explain that a pretrained YOLO model is used as a base model and then fine-tuned on the custom carton dataset.
+- Mention the configured base model `models/yolov8n.pt`.
+- Explain this as transfer learning / fine-tuning.
+
+8. Important clarification about algorithms
+- Answer explicitly whether KMeans was used.
+- State clearly: based on the repository, KMeans or any clustering algorithm is not used in the training pipeline.
+- State clearly: the project is based on YOLO object detection and fine-tuning, not unsupervised clustering.
+- If useful, briefly explain the difference between object detection and clustering.
+
+9. How the custom model was created
+- Explain step by step:
+  - inspect the CVAT dataset
+  - validate labels
+  - exclude samples with missing labels
+  - create a prepared YOLO dataset
+  - start from pretrained YOLO weights
+  - train a custom detector on the carton classes
+  - save the best trained weights
+- Mention the important output path:
+  - `runs/train/carton_detector_gpu/weights/best.pt`
+
+10. Training setup
+- Include the main configured training parameters from the repository:
+  - epochs: 50
+  - image size: 640
+  - batch size: 8
+  - patience: 20
+  - workers: 2
+  - cache: false
+- Mention that training prefers GPU if CUDA is available, otherwise CPU.
+- Explain these parameters in simple classroom-friendly language.
+
+11. Inference pipeline
+- Explain what happens after training:
+  - the model is loaded
+  - images, videos, or webcam streams are processed
+  - detections are returned with class name, confidence, and bounding boxes
+  - annotated output can be displayed or saved
+- Explain confidence threshold in simple terms.
+
+12. Software architecture
+- Explain that this is not just a single training script.
+- Show that the repository has a modular structure with:
+  - CLI orchestration
+  - configuration file
+  - dataset management
+  - training module
+  - inference/detector module
+  - edge export module
+  - tests
+- Make this understandable for students.
+
+13. Engineering improvements added in the project
+- Explain the practical project engineering features found in the repository:
+  - cleaner modular structure
+  - YAML configuration via `configs/defaults.yaml`
+  - reusable subcommands
+  - dataset reports
+  - training summary generation
+  - structured logging
+  - launcher shortcuts like image, video, webcam
+  - early dependency checks for export
+- Explain why these are important in real AI projects.
+
+14. Edge deployment and Raspberry Pi
+- Explain that the project is prepared for edge deployment.
+- Mention supported export targets listed in the repo:
+  - ONNX
+  - OpenVINO
+  - TFLite
+- Explain that labels are exported too and that there is an export manifest.
+- Mention that Raspberry Pi deployment is a project goal.
+
+15. Testing and validation of the pipeline
+- Explain that there are automated tests in the repository.
+- Mention that tests check CLI behavior and dataset preparation logic.
+- Explain why testing matters even in AI projects.
+
+16. Limitations and honest assessment
+- Include an honest slide about current limits:
+  - the dataset is still relatively small
+  - 9 labels are missing
+  - the repo does not show a full evaluation command with mAP/confusion matrix outputs
+  - class naming contains spelling inconsistencies
+  - the current project is carton-focused, not yet a full recycling model
+- This slide must be clear and realistic.
+
+17. Team integration perspective
+- Explain how this carton project can be extended with metal and plastic datasets from teammates.
+- Mention the repository recommendation that future datasets should use a shared label taxonomy and canonical class mapping.
+- Explain why merging multiple teammate datasets requires standardization.
+
+18. Suggested future work
+- Based on the repository recommendations, include future improvements such as:
+  - merging multiple CVAT exports
+  - harmonizing class names
+  - dataset versioning
+  - evaluation command with precision/recall/mAP
+  - model registry
+  - edge benchmarking
+
+19. Final summary
+- Summarize what was actually achieved in this project:
+  - custom carton dataset inspection
+  - cleaned training subset creation
+  - custom YOLO fine-tuning
+  - working inference
+  - export preparation for edge devices
+
+20. Final takeaway
+- End with a simple message in German that this project is a strong foundation for a larger recycling AI system where different material categories can later be merged into one shared solution.
+
+Presentation style requirements:
+- Use simple German suitable for classmates, but still technically correct.
+- When discussing AI, explain terms like YOLO, fine-tuning, validation split, confidence threshold, and edge deployment in easy language.
+- Do not make the presentation sound like marketing; it should sound like a student project presentation with honest technical depth.
+- If code-level facts are needed, extract them from the uploaded files.
+- If a method is not found in the uploaded repository, explicitly say it is not evidenced in the project.
+
+Extra instruction:
+Where appropriate, mention that this project is currently strongest as a modular AI engineering workflow for custom carton detection, and that its real long-term value is that it can scale into a combined sustainability/recycling detection system with more classes from teammates.
