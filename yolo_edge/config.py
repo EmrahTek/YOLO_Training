@@ -78,6 +78,21 @@ class ExportConfig:
 
 
 @dataclass(frozen=True)
+class EvaluationConfig:
+    """Store evaluation defaults."""
+
+    model_path: Path
+    dataset_yaml: Path
+    split: str
+    image_size: int
+    batch_size: int
+    device: str | None
+    project_directory: Path
+    run_name: str
+    workers: int
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Store all application defaults in one structure."""
 
@@ -85,6 +100,7 @@ class AppConfig:
     dataset: DatasetConfig
     train: TrainConfig
     export: ExportConfig
+    evaluation: EvaluationConfig
 
 
 def load_app_config(config_path: Path | None = None) -> AppConfig:
@@ -96,11 +112,12 @@ def load_app_config(config_path: Path | None = None) -> AppConfig:
     dataset_section = yaml_content.get("dataset", {})
     train_section = yaml_content.get("train", {})
     export_section = yaml_content.get("export", {})
+    evaluation_section = yaml_content.get("evaluation", {})
 
     return AppConfig(
         predict=PredictConfig(
-            model_path=Path(predict_section.get("model_path", "models/yolov8n.pt")),
-            confidence=float(predict_section.get("confidence", 0.25)),
+            model_path=Path(predict_section.get("model_path", "runs/train/carton_detector_gpu/weights/best.pt")),
+            confidence=float(predict_section.get("confidence", 0.50)),
             device=_none_if_empty(predict_section.get("device")),
             image_size=int(predict_section.get("image_size", 640)),
             image_directory=Path(predict_section.get("image_directory", "data/images")),
@@ -146,6 +163,17 @@ def load_app_config(config_path: Path | None = None) -> AppConfig:
             device=_none_if_empty(export_section.get("device")),
             benchmark_image=_optional_path(export_section.get("benchmark_image")),
             benchmark_runs=int(export_section.get("benchmark_runs", 10)),
+        ),
+        evaluation=EvaluationConfig(
+            model_path=Path(evaluation_section.get("model_path", "runs/train/carton_detector_gpu/weights/best.pt")),
+            dataset_yaml=Path(evaluation_section.get("dataset_yaml", "data/processed/caton_hause/data.yaml")),
+            split=str(evaluation_section.get("split", "val")),
+            image_size=int(evaluation_section.get("image_size", 640)),
+            batch_size=int(evaluation_section.get("batch_size", 1)),
+            device=_none_if_empty(evaluation_section.get("device")),
+            project_directory=Path(evaluation_section.get("project_directory", "runs/eval")),
+            run_name=str(evaluation_section.get("run_name", "carton_detector_gpu")),
+            workers=int(evaluation_section.get("workers", 0)),
         ),
     )
 

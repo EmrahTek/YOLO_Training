@@ -229,5 +229,9 @@ class EdgeExporter:
             "openvino": "openvino",
             "tensorflow": "tensorflow",
         }
-        packages = [requirement_map[module_name] for module_name in missing_modules]
-        return ".venv/bin/pip install " + " ".join(packages)
+        packages = [
+            f'"{requirement_map[module_name]}"' if any(operator in requirement_map[module_name] for operator in ("<", ">", "="))
+            else requirement_map[module_name]
+            for module_name in missing_modules
+        ]
+        return ".venv/bin/python -m pip install " + " ".join(packages)

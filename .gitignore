@@ -85,12 +85,11 @@ outputs/
 data/*
 
 # Keep folder structure
+!data/cvat_exports/.gitkeep
+!data/images/.gitkeep
+!data/processed/.gitkeep
 !data/raw/.gitkeep
-!data/external/.gitkeep
-!data/dataset/images/train/.gitkeep
-!data/dataset/images/val/.gitkeep
-!data/dataset/labels/train/.gitkeep
-!data/dataset/labels/val/.gitkeep
+!data/videos/.gitkeep
 !data/.gitkeep
 
 # =========================

@@ -1,6 +1,6 @@
 predict:
-  model_path: models/yolov8n.pt
-  confidence: 0.25
+  model_path: runs/train/carton_detector_gpu/weights/best.pt
+  confidence: 0.50
   device:
   image_size: 640
   image_directory: data/images
@@ -49,3 +49,14 @@ export:
   device:
   benchmark_image: data/images/emrah_carton_hause_1.jpeg
   benchmark_runs: 10
+
+evaluation:
+  model_path: runs/train/carton_detector_gpu/weights/best.pt
+  dataset_yaml: data/processed/caton_hause/data.yaml
+  split: val
+  image_size: 640
+  batch_size: 1
+  device:
+  project_directory: runs/eval
+  run_name: carton_detector_gpu
+  workers: 0

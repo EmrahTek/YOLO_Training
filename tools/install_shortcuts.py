@@ -20,6 +20,7 @@ COMMAND_TO_ARGUMENTS = {
     "inspect-dataset": ("inspect-dataset",),
     "prepare-dataset": ("prepare-dataset",),
     "train-carton": ("train",),
+    "evaluate-model": ("evaluate",),
     "export-edge": ("export",),
 }
 

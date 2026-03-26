@@ -32,6 +32,14 @@ class CliValidationTestCase(unittest.TestCase):
         arguments = parser.parse_args(["predict", "video", "--path", "sample.mp4"])
         validate_arguments(arguments, parser)
 
+    def test_predict_confidence_below_threshold_is_rejected(self) -> None:
+        """Prediction confidence lower than 0.50 should be rejected."""
+        parser = build_argument_parser()
+        arguments = parser.parse_args(["predict", "image", "--confidence", "0.49"])
+
+        with self.assertRaises(SystemExit):
+            validate_arguments(arguments, parser)
+
     def test_external_camera_mode_is_supported(self) -> None:
         """External camera should be a valid simplified mode."""
         parser = build_argument_parser()
@@ -44,12 +52,22 @@ class CliValidationTestCase(unittest.TestCase):
 
         self.assertEqual(arguments.command, "predict")
         self.assertEqual(arguments.source, "image")
+        self.assertEqual(arguments.confidence, 0.5)
+        self.assertIsNotNone(arguments.device)
 
     def test_train_subcommand_is_available(self) -> None:
         """The project should expose a dedicated train subcommand."""
         arguments = parse_arguments(["train"])
 
         self.assertEqual(arguments.command, "train")
+        self.assertIsNotNone(arguments.device)
+
+    def test_evaluate_subcommand_is_available(self) -> None:
+        """The project should expose a dedicated evaluate subcommand."""
+        arguments = parse_arguments(["evaluate"])
+
+        self.assertEqual(arguments.command, "evaluate")
+        self.assertIsNotNone(arguments.device)
 
 
 if __name__ == "__main__":

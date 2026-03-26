@@ -41,8 +41,9 @@ Completed work:
 - added stronger error handling and structured logging
 - trained a custom carton model on the available labeled data
 - added configuration support through `configs/defaults.yaml`
-- added subcommands for `predict`, `inspect-dataset`, `prepare-dataset`, `train`, and `export`
+- added subcommands for `predict`, `inspect-dataset`, `prepare-dataset`, `train`, `evaluate`, and `export`
 - added dataset report generation and training summary generation
+- added final evaluation support with reproducible validation metrics and confusion matrix artifacts
 - added Raspberry Pi oriented export support
 - fixed export behavior so missing ONNX-related dependencies fail early with a clear message
 - updated the README to match the real working commands
@@ -85,7 +86,7 @@ That means the intended workflow is:
 
 ## Architecture Overview
 
-The project now includes the three high-impact upgrades that were planned:
+The project now includes the four high-impact upgrades that were planned:
 
 1. Custom model training was stabilized.
 The dataset is inspected before training, missing and malformed labels are reported, a cleaned split is created, and metadata is written for reproducibility.
@@ -93,7 +94,10 @@ The dataset is inspected before training, missing and malformed labels are repor
 2. Config + subcommand architecture was added.
 The simple launcher commands still work, but the internal CLI now also supports scalable automation with subcommands.
 
-3. Raspberry Pi export support was added.
+3. Reproducible evaluation support was added.
+The trained model can now be validated on the prepared YOLO split and persist Precision, Recall, F1-score, mAP@0.5, mAP@0.5:0.95, and confusion matrix artifacts inside `runs/eval/`.
+
+4. Raspberry Pi export support was added.
 The project can export a trained model, generate a labels file, and write an export manifest for deployment packaging.
 
 ## Current Folder Structure
@@ -103,15 +107,10 @@ The project can export a trained model, generate a labels file, and write an exp
 ├── README.md
 ├── RECOMMENDATIONS.md
 ├── requirements.txt
-├── requirements-export.txt
 ├── main.py
-├── train.py
-├── export.py
-├── auto_git_manager.py
 ├── configs/
 │   └── defaults.yaml
 ├── tools/
-│   ├── auto_git_manager.py
 │   └── install_shortcuts.py
 ├── tests/
 │   ├── test_cli.py
@@ -129,6 +128,7 @@ The project can export a trained model, generate a labels file, and write an exp
     ├── cli.py
     ├── config.py
     ├── training.py
+    ├── evaluation.py
     ├── edge_export.py
     ├── core/
     │   ├── detector.py
@@ -159,7 +159,30 @@ Shortcut commands created in `.venv/bin`:
 - `inspect-dataset`
 - `prepare-dataset`
 - `train-carton`
+- `evaluate-model`
 - `export-edge`
+
+## Model Evaluation
+
+Run the final evaluation on the prepared validation split:
+
+```bash
+.venv/bin/python3 main.py evaluate
+```
+
+Shortcut form after installing launchers:
+
+```bash
+.venv/bin/evaluate-model
+```
+
+Main evaluation outputs:
+
+- `runs/eval/carton_detector_gpu/evaluation_summary.yaml`
+- `runs/eval/carton_detector_gpu/confusion_matrix.png`
+- `runs/eval/carton_detector_gpu/confusion_matrix_normalized.png`
+- `runs/eval/carton_detector_gpu/confusion_matrix.csv`
+- `runs/eval/carton_detector_gpu/confusion_matrix_normalized.csv`
 
 ## Configuration
 
@@ -221,6 +244,8 @@ Behavior:
 - advances automatically through images
 - keeps each image on screen for `2` seconds by default
 - stops on `q` or `Esc`
+- uses a default confidence threshold of `0.50`, so detections below `50%` are ignored
+- uses the first CUDA GPU automatically when available, otherwise falls back to CPU
 
 ### Video Inference
 
@@ -296,7 +321,7 @@ The same project now also supports a more structured CLI.
 Manual training command:
 
 ```bash
-.venv/bin/python3 train.py \
+.venv/bin/python3 main.py train \
     --dataset-root data/cvat_exports/caton_hause \
     --image-source-dir data/images \
     --prepared-dataset-dir data/processed/caton_hause \
@@ -312,7 +337,7 @@ Manual training command:
 Use the first CUDA GPU explicitly:
 
 ```bash
-.venv/bin/python3 train.py \
+.venv/bin/python3 main.py train \
     --dataset-root data/cvat_exports/caton_hause \
     --image-source-dir data/images \
     --prepared-dataset-dir data/processed/caton_hause \
@@ -329,7 +354,7 @@ Use the first CUDA GPU explicitly:
 Force training on the CPU:
 
 ```bash
-.venv/bin/python3 train.py \
+.venv/bin/python3 main.py train \
     --dataset-root data/cvat_exports/caton_hause \
     --image-source-dir data/images \
     --prepared-dataset-dir data/processed/caton_hause \
@@ -360,10 +385,10 @@ Important outputs:
 
 ## Export For Raspberry Pi
 
-Install export dependencies first:
+Install export dependencies only if you actually want ONNX, OpenVINO, or TFLite export:
 
 ```bash
-.venv/bin/pip install -r requirements-export.txt
+.venv/bin/python3 -m pip install "onnx>=1.12.0,<=1.19.1" onnxruntime "onnxslim>=0.1.71" openvino tensorflow
 ```
 
 Then export:

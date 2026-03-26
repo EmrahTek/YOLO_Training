@@ -60,7 +60,7 @@ class ObjectDetector:
     def __init__(
         self,
         model_path: Path,
-        confidence_threshold: float = 0.25,
+        confidence_threshold: float = 0.50,
         device: str | None = None,
         image_size: int = 640,
     ) -> None:

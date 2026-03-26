@@ -15,6 +15,9 @@ from yolo_edge.config import AppConfig
 from yolo_edge.config import load_app_config
 from yolo_edge.data.dataset_manager import DatasetManager
 from yolo_edge.edge_export import EdgeExporter
+from yolo_edge.evaluation import get_default_device as get_default_evaluation_device
+from yolo_edge.evaluation import run_evaluation
+from yolo_edge.training import get_default_device as get_default_training_device
 from yolo_edge.training import run_training
 from yolo_edge.utils.logging_utils import configure_logging
 
@@ -53,6 +56,9 @@ def build_argument_parser(app_config: AppConfig | None = None) -> argparse.Argum
     train_parser = subparsers.add_parser("train", help="Prepare the dataset and train a custom YOLO model.")
     _add_train_arguments(train_parser, resolved_config)
 
+    evaluate_parser = subparsers.add_parser("evaluate", help="Evaluate a trained model on the prepared dataset.")
+    _add_evaluate_arguments(evaluate_parser, resolved_config)
+
     export_parser = subparsers.add_parser("export", help="Export trained weights for Raspberry Pi deployment.")
     _add_export_arguments(export_parser, resolved_config)
 
@@ -72,7 +78,7 @@ def parse_arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser = build_argument_parser(app_config)
     arguments = parser.parse_args(raw_arguments)
     if arguments.command is None:
-        parser.error("A command is required. Use predict, train, inspect-dataset, prepare-dataset, or export.")
+        parser.error("A command is required. Use predict, train, evaluate, inspect-dataset, prepare-dataset, or export.")
     validate_arguments(arguments, parser)
     return arguments
 
@@ -84,6 +90,8 @@ def validate_arguments(arguments: argparse.Namespace, parser: argparse.ArgumentP
             parser.error("--path cannot be used when source is webcam or external-camera.")
         if arguments.image_delay_ms < 1:
             parser.error("--image-delay-ms must be greater than 0.")
+        if not 0.50 <= arguments.confidence <= 1.0:
+            parser.error("--confidence must be between 0.50 and 1.0.")
 
 
 def resolve_legacy_path(path: Path | None) -> Path | None:
@@ -362,6 +370,10 @@ def main(argv: list[str] | None = None) -> None:
             _run_train_command(arguments)
             return
 
+        if arguments.command == "evaluate":
+            _run_evaluate_command(arguments)
+            return
+
         if arguments.command == "export":
             _run_export_command(arguments)
             return
@@ -370,7 +382,7 @@ def main(argv: list[str] | None = None) -> None:
         LOGGER.error("Current interpreter: %s", sys.executable)
         LOGGER.error("Recommended interpreter: %s", PROJECT_ROOT / ".venv" / "bin" / "python3")
         LOGGER.error(
-            "Run with the project interpreter, for example: %s main.py image --model-path models/yolov8n.pt",
+            "Run with the project interpreter, for example: %s main.py image --model-path runs/train/carton_detector_gpu/weights/best.pt",
             PROJECT_ROOT / ".venv" / "bin" / "python3",
         )
         LOGGER.error("If needed, recreate the virtual environment because your current activation script may point to an old path.")
@@ -489,7 +501,7 @@ def _run_train_command(arguments: argparse.Namespace) -> None:
         epochs=arguments.epochs,
         image_size=arguments.image_size,
         batch_size=arguments.batch_size,
-        device=str(arguments.device),
+        device=str(arguments.device if arguments.device is not None else get_default_training_device()),
         validation_ratio=arguments.validation_ratio,
         random_seed=arguments.random_seed,
         project_directory=arguments.project_dir,
@@ -533,6 +545,21 @@ def _run_export_command(arguments: argparse.Namespace) -> None:
         LOGGER.info("Benchmark summary: %s", benchmark_summary)
 
 
+def _run_evaluate_command(arguments: argparse.Namespace) -> None:
+    """Evaluate a trained model and persist the resulting metrics."""
+    run_evaluation(
+        model_path=resolve_legacy_path(arguments.model_path) or arguments.model_path,
+        dataset_yaml_path=resolve_legacy_path(arguments.dataset_yaml) or arguments.dataset_yaml,
+        split=arguments.split,
+        image_size=arguments.image_size,
+        batch_size=arguments.batch_size,
+        device=str(arguments.device if arguments.device is not None else get_default_evaluation_device()),
+        project_directory=arguments.project_dir,
+        run_name=arguments.run_name,
+        workers=arguments.workers,
+    )
+
+
 def _add_predict_arguments(parser: argparse.ArgumentParser, app_config: AppConfig) -> None:
     """Attach inference arguments to a parser."""
     parser.add_argument(
@@ -548,7 +575,7 @@ def _add_predict_arguments(parser: argparse.ArgumentParser, app_config: AppConfi
     )
     parser.add_argument("--model-path", type=Path, default=app_config.predict.model_path)
     parser.add_argument("--confidence", type=float, default=app_config.predict.confidence)
-    parser.add_argument("--device", default=app_config.predict.device)
+    parser.add_argument("--device", default=app_config.predict.device or get_default_training_device())
     parser.add_argument("--image-size", type=int, default=app_config.predict.image_size)
     parser.add_argument("--no-show", action="store_true", help="Disable the visualization window.")
     parser.add_argument("--save-output", action="store_true")
@@ -582,7 +609,7 @@ def _add_train_arguments(parser: argparse.ArgumentParser, app_config: AppConfig)
     parser.add_argument("--epochs", type=int, default=app_config.train.epochs)
     parser.add_argument("--image-size", type=int, default=app_config.train.image_size)
     parser.add_argument("--batch-size", type=int, default=app_config.train.batch_size)
-    parser.add_argument("--device", default=app_config.train.device)
+    parser.add_argument("--device", default=app_config.train.device or get_default_training_device())
     parser.add_argument("--project-dir", type=Path, default=app_config.train.project_directory)
     parser.add_argument("--run-name", default=app_config.train.run_name)
     parser.add_argument("--patience", type=int, default=app_config.train.patience)
@@ -605,6 +632,21 @@ def _add_export_arguments(parser: argparse.ArgumentParser, app_config: AppConfig
     parser.add_argument("--benchmark-image", type=Path, default=app_config.export.benchmark_image)
     parser.add_argument("--benchmark-runs", type=int, default=app_config.export.benchmark_runs)
     parser.add_argument("--confidence", type=float, default=app_config.predict.confidence)
+    parser.add_argument("--log-level", default=app_config.predict.log_level, choices=("DEBUG", "INFO", "WARNING", "ERROR"))
+    parser.add_argument("--log-dir", type=Path, default=app_config.predict.log_directory)
+
+
+def _add_evaluate_arguments(parser: argparse.ArgumentParser, app_config: AppConfig) -> None:
+    """Attach evaluation arguments to a parser."""
+    parser.add_argument("--model-path", type=Path, default=app_config.evaluation.model_path)
+    parser.add_argument("--dataset-yaml", type=Path, default=app_config.evaluation.dataset_yaml)
+    parser.add_argument("--split", choices=("train", "val", "test"), default=app_config.evaluation.split)
+    parser.add_argument("--image-size", type=int, default=app_config.evaluation.image_size)
+    parser.add_argument("--batch-size", type=int, default=app_config.evaluation.batch_size)
+    parser.add_argument("--device", default=app_config.evaluation.device or get_default_evaluation_device())
+    parser.add_argument("--project-dir", type=Path, default=app_config.evaluation.project_directory)
+    parser.add_argument("--run-name", default=app_config.evaluation.run_name)
+    parser.add_argument("--workers", type=int, default=app_config.evaluation.workers)
     parser.add_argument("--log-level", default=app_config.predict.log_level, choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     parser.add_argument("--log-dir", type=Path, default=app_config.predict.log_directory)
 
